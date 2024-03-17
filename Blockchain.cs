@@ -66,6 +66,7 @@ namespace SciChain
         public string PreviousHash { get; set; } // The hash of the previous block
         public IList<Transaction> Transactions { get; set; }
         public string Hash { get; set; } // The block's hash
+        public string Guid { get; set; }
         public Document BlockDocument { get; set; }
         public class Document
         {
@@ -86,6 +87,7 @@ namespace SciChain
             PreviousHash = previousHash;
             Transactions = transactions;
             Hash = CalculateHash();
+            Guid = new Guid().ToString();
         }
 
         public string CalculateHash()
@@ -117,7 +119,9 @@ namespace SciChain
         public const decimal miningReward = 10;
         public const int maxPeers = 8;
         public const int port = 8333;
-        public const int reviewers = 8;
+        //For now for testing reviewers will be 1 once released this will be 8 reviewers per block.
+        public const int reviewers = 1;
+        //For now for testing minimum flags will be 0.
         public const int flags = 0;
         static string dir = System.IO.Path.GetDirectoryName(Environment.ProcessPath);
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
@@ -224,7 +228,7 @@ namespace SciChain
             return balance;
         }
 
-        public static int GetReviews(int index)
+        public static int GetReviews(string guid)
         {
             int revs = 0;
             foreach (var block in Chain)
@@ -234,7 +238,7 @@ namespace SciChain
                 {
                     if (trans.TransactionType != Transaction.Type.review)
                         continue;
-                    if (trans.Data == index.ToString())
+                    if (trans.Data == guid.ToString())
                         revs++;
                 }
             }
@@ -260,7 +264,6 @@ namespace SciChain
 
         public static void AddBlock(Block block)
         {
-            
             Block latestBlock = GetLatestBlock();
             if (latestBlock != null)
             {
@@ -277,6 +280,12 @@ namespace SciChain
         {
             PendingTransactions.Add(transaction);
             BroadcastNewTransaction(transaction);
+        }
+
+        public static void AddPendingBlock(Block b)
+        {
+            PendingBlocks.Add(b);
+            BroadcastNewPendingBlock(b);
         }
 
         public static bool ProcessTransaction(Transaction transaction)
@@ -520,6 +529,13 @@ namespace SciChain
                 Block b = JsonConvert.DeserializeObject<Block>(com.Content);
                 AddBlock(b);
             }
+            else
+            if(message.Type == "PendingBlock")
+            {
+                var com = JsonConvert.DeserializeObject<GetCommand>(con);
+                Block b = JsonConvert.DeserializeObject<Block>(com.Content);
+                PendingBlocks.Add(b);
+            }
             // Handle other message types as necessary
         }
 
@@ -553,6 +569,28 @@ namespace SciChain
             var message = new Message
             {
                 Type = "NewBlock",
+                Content = JsonConvert.SerializeObject(block)
+            };
+
+            var messageString = JsonConvert.SerializeObject(message);
+            foreach (var peer in Peers)
+            {
+                try
+                {
+                    peer.Value.Client.Send(messageString);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Error sending message to peer {peer.Value.Address}:{peer.Value.Port} - {e.Message}");
+                    // Handle error (e.g., remove peer from list)
+                }
+            }
+        }
+        public static void BroadcastNewPendingBlock(Block block)
+        {
+            var message = new Message
+            {
+                Type = "PendingBlock",
                 Content = JsonConvert.SerializeObject(block)
             };
 
@@ -696,10 +734,11 @@ namespace SciChain
             }
             var block = new Block(DateTime.Now, GetLatestBlock().Hash, transactions);
             block.BlockDocument = doc;
+            AddPendingBlock(block);
             List<Block> blocks = new List<Block>();
             foreach (var bl in PendingBlocks)
             {
-                int revs = GetReviews(bl.Index);
+                int revs = GetReviews(bl.Guid);
                 int fls = GetFlags(bl.Index);
                 if(revs > reviewers && fls < flags)
                 {
@@ -718,11 +757,10 @@ namespace SciChain
                     ProcessTransaction(new Transaction(Transaction.Type.addreputation, null, par, minerAddress, 1));
                 }
                 PendingBlocks = new List<Block>();
-                PendingBlocks.Add(block);
                 // Reset the pending transactions
                 PendingTransactions = new List<Transaction>();
                 if (currentSupply < totalSupply)
-                    currentSupply += miningReward;
+                    currentSupply += miningReward * blocks.Count;
             }
         }
 
