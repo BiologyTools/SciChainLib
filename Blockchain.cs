@@ -29,11 +29,16 @@ namespace SciChain
                 transaction,
                 blockreward,
                 registration,
+                review,
+                flag,
+                addreputation,
+                removereputation,
             }
             public string FromAddress { get; set; }
             public string ToAddress { get; set; }
             public string PublicKey { get; set; }
             public decimal Amount { get; set; }
+            public string Data { get; set; }
             public string Signature { get; set; }
             public Type TransactionType { get; set; }
             public Transaction(Type t, string fromAddress, RSAParameters par, string toAddress, decimal amount)
@@ -98,6 +103,7 @@ namespace SciChain
     {
         public static int currentHeight = 0;
         public static List<Transaction> PendingTransactions = new List<Transaction>();
+        public static List<Block> PendingBlocks = new List<Block>();
         public static IList<Block> Chain { set; get; }
         //Total supply is calculated to be one coin per person.
         public const decimal totalSupply = 9900000000 + treasury;
@@ -105,12 +111,14 @@ namespace SciChain
         public static decimal treasuryBalance = treasury;
         //We will use 10 billion people as our population
         public const long population = 10000000000;
-        //With the treasury we can give each user 0.01 coins.
-        public const decimal gift = 0.01M;
-        public static decimal currentSupply = 0;
+        //With the treasury we can give each user 0.01 coins. But we give only 0.005 so that half of the treasury is left for developement.
+        public const decimal gift = 0.005M;
+        public static decimal currentSupply = treasury;
         public const decimal miningReward = 10;
         public const int maxPeers = 8;
         public const int port = 8333;
+        public const int reviewers = 8;
+        public const int flags = 0;
         static string dir = System.IO.Path.GetDirectoryName(Environment.ProcessPath);
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
         public static string IP;
@@ -175,8 +183,84 @@ namespace SciChain
             return balance;
         }
 
+        public static decimal GetReputation(string address)
+        {
+            decimal balance = 0;
+
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType != Transaction.Type.addreputation || trans.TransactionType != Transaction.Type.removereputation)
+                            continue;
+                        if (trans.FromAddress == address && trans.TransactionType == Transaction.Type.removereputation)
+                        {
+                            balance -= trans.Amount;
+                        }
+                        if (trans.ToAddress == address && trans.TransactionType == Transaction.Type.addreputation)
+                        {
+                            balance += trans.Amount;
+                        }
+                    }
+            }
+
+            return balance;
+        }
+
+        public static decimal GetTreasury()
+        {
+            decimal balance = treasury;
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                foreach (var trans in block.Transactions)
+                {
+                    if (trans.TransactionType != Transaction.Type.registration)
+                        continue;
+                    balance -= 0.005M;
+                }
+            }
+            return balance;
+        }
+
+        public static int GetReviews(int index)
+        {
+            int revs = 0;
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                foreach (var trans in block.Transactions)
+                {
+                    if (trans.TransactionType != Transaction.Type.review)
+                        continue;
+                    if (trans.Data == index.ToString())
+                        revs++;
+                }
+            }
+            return revs;
+        }
+
+        public static int GetFlags(int index)
+        {
+            int revs = 0;
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType != Transaction.Type.flag)
+                            continue;
+                        if (trans.Data == index.ToString())
+                            revs++;
+                    }
+            }
+            return revs;
+        }
+
         public static void AddBlock(Block block)
         {
+            
             Block latestBlock = GetLatestBlock();
             if (latestBlock != null)
             {
@@ -202,7 +286,6 @@ namespace SciChain
                 Console.WriteLine("Transaction failed: Not a valid transaction.");
                 return false;
             }
-
             if (transaction.TransactionType == Transaction.Type.transaction)
             {
                 // Proceed with adding the transaction
@@ -243,12 +326,32 @@ namespace SciChain
                     PendingTransactions.Add(transaction);
                 }
             }
+            else if (transaction.TransactionType == Transaction.Type.review)
+            {
+                transaction.Amount = gift;
+                PendingTransactions.Add(transaction);
+            }
+            else if (transaction.TransactionType == Transaction.Type.blockreward)
+            {
+                transaction.Amount = miningReward; 
+                PendingTransactions.Add(transaction);
+            }
+            else if (transaction.TransactionType == Transaction.Type.addreputation)
+            {
+                transaction.Amount = 1;
+                PendingTransactions.Add(transaction);
+            }
+            else if (transaction.TransactionType == Transaction.Type.removereputation)
+            {
+                transaction.Amount = 10;
+                PendingTransactions.Add(transaction);
+            }
             BroadcastNewTransaction(transaction);
             return true;
         }
         public static bool VerifyTransaction(Transaction transaction)
         {
-            if (transaction.TransactionType != Transaction.Type.blockreward)
+            if (transaction.TransactionType != Transaction.Type.transaction)
                 return true;
             using (var rsa = new RSACryptoServiceProvider())
             {
@@ -583,6 +686,8 @@ namespace SciChain
 
         public static void MineBlock(string minerAddress,Document doc,RSAParameters par)
         {
+            if (GetReputation(minerAddress) < 0)
+                return;
             List<Transaction> transactions = new List<Transaction>();
             foreach (var transaction in PendingTransactions)
             {
@@ -591,12 +696,34 @@ namespace SciChain
             }
             var block = new Block(DateTime.Now, GetLatestBlock().Hash, transactions);
             block.BlockDocument = doc;
-            AddBlock(block);
-            // Reset the pending transactions and send mining reward
-            PendingTransactions = new List<Transaction>();
-            ProcessTransaction(new Transaction(Transaction.Type.blockreward,null,par, minerAddress, miningReward));
-            if(currentSupply < totalSupply)
-            currentSupply += miningReward;
+            List<Block> blocks = new List<Block>();
+            foreach (var bl in PendingBlocks)
+            {
+                int revs = GetReviews(bl.Index);
+                int fls = GetFlags(bl.Index);
+                if(revs > reviewers && fls < flags)
+                {
+                    blocks.Add(bl);
+                }
+            }
+            if (blocks.Count > 0)
+            {
+                for (int i = 0; i < blocks.Count; i++)
+                {
+                    Block bl = blocks[i];
+                    if (i == 0)
+                        bl.Transactions = transactions;
+                    AddBlock(bl);
+                    ProcessTransaction(new Transaction(Transaction.Type.blockreward, null, par, minerAddress, miningReward));
+                    ProcessTransaction(new Transaction(Transaction.Type.addreputation, null, par, minerAddress, 1));
+                }
+                PendingBlocks = new List<Block>();
+                PendingBlocks.Add(block);
+                // Reset the pending transactions
+                PendingTransactions = new List<Transaction>();
+                if (currentSupply < totalSupply)
+                    currentSupply += miningReward;
+            }
         }
 
         public class Wallet
