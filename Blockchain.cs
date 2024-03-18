@@ -18,6 +18,8 @@ using JsonIgnoreAttribute = Newtonsoft.Json.JsonIgnoreAttribute;
 using NetCoreServer;
 using System.Reflection;
 using System.Drawing;
+using System.Runtime.CompilerServices;
+using static SciChain.Blockchain;
 namespace SciChain
 {
     public class Block
@@ -103,13 +105,16 @@ namespace SciChain
 
     public static class Blockchain
     {
+        public static Wallet wallet;
+        public static string ID;
         public static int currentHeight = 0;
         public static List<Transaction> PendingTransactions = new List<Transaction>();
         public static List<Block> PendingBlocks = new List<Block>();
         public static IList<Block> Chain { set; get; }
         //Total supply is calculated to be one coin per person.
-        public const decimal totalSupply = 9900000000 + treasury;
+        public const decimal totalSupply = 9900000000 + treasury + founder;
         public const decimal treasury = 100000000;
+        public const decimal founder = (9900000000 + treasury) * 0.05M;
         public static decimal treasuryBalance = treasury;
         //We will use 10 billion people as our population
         public const long population = 10000000000;
@@ -127,8 +132,10 @@ namespace SciChain
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
         public static string IP;
         public static ChatServer Server;
-        public static void Initialize(bool startServer = true)
+        public static void Initialize(Wallet wal, string id)
         {
+            wallet = wal;
+            ID = id;
             Settings.Load();
             string h = Settings.GetSettings("Height");
             if(h!="")
@@ -136,23 +143,24 @@ namespace SciChain
             Chain = new List<Block>();
             Directory.CreateDirectory(dir + "/Blocks");
             IP = new System.Net.WebClient().DownloadString("https://api.ipify.org");
-            if (startServer)
-            {
-                Server = new ChatServer(IPAddress.Any, 8333);
-                Server.OptionKeepAlive = true;
-                bool start = Server.Start();
-                Console.WriteLine("Started:" + start);
-            }
+            Server = new ChatServer(IPAddress.Any, 8333);
+            Server.OptionKeepAlive = true;
+            bool start = Server.Start();
+            Console.WriteLine("Started:" + start);
         }
 
-        public static void AddGenesisBlock()
+        public static void AddGenesisBlock(Wallet wallet, string ID)
         {
-            Chain.Add(CreateGenesisBlock());
+            if(Chain.Count == 0)
+            Chain.Add(CreateGenesisBlock(wallet,ID));
         }
 
-        private static Block CreateGenesisBlock()
+        private static Block CreateGenesisBlock(Wallet wallet, string ID)
         {
-            return new Block(DateTime.Now, null, null);
+            Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, ID, founder);
+            List<Transaction> trs = new List<Transaction>();
+            trs.Add(tr);
+            return new Block(DateTime.Now, null, trs);
         }
 
         public static Block GetLatestBlock()
@@ -211,6 +219,8 @@ namespace SciChain
 
             return balance;
         }
+
+        
 
         public static decimal GetTreasury()
         {
@@ -272,7 +282,6 @@ namespace SciChain
                 block.Hash = block.CalculateHash();
                 Chain.Add(block);
                 Save(block);
-                BroadcastNewBlock(block);
             }
         }
 
@@ -511,7 +520,7 @@ namespace SciChain
                 int h = int.Parse(com.Data);
                 if (Chain.Count == 0)
                 {
-                    AddGenesisBlock();
+                    AddGenesisBlock(wallet,ID);
                 }
                 if (h < Chain.Count)
                 {
@@ -528,6 +537,7 @@ namespace SciChain
                 var com = JsonConvert.DeserializeObject<GetCommand>(con);
                 Block b = JsonConvert.DeserializeObject<Block>(com.Content);
                 AddBlock(b);
+                BroadcastNewBlock(b);
             }
             else
             if(message.Type == "PendingBlock")
@@ -578,6 +588,7 @@ namespace SciChain
                 try
                 {
                     peer.Value.Client.Send(messageString);
+                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
                 }
                 catch (Exception e)
                 {
@@ -600,6 +611,7 @@ namespace SciChain
                 try
                 {
                     peer.Value.Client.Send(messageString);
+                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
                 }
                 catch (Exception e)
                 {
@@ -610,6 +622,7 @@ namespace SciChain
         }
         public static void SendGetBlockMessage(GetCommand com)
         {
+            Console.WriteLine("Sending GetBlock Message");
             var message = new Message
             {
                 Type = "GetBlock",
@@ -619,6 +632,7 @@ namespace SciChain
             {
                 var messageString = JsonConvert.SerializeObject(message);
                 com.Peer.Client.Send(messageString);
+                com.Peer.Client.Receive(Encoding.UTF8.GetBytes(messageString));
             }
             catch (Exception e)
             {
@@ -641,6 +655,7 @@ namespace SciChain
                 {
                     Console.WriteLine("SendBlockMessage to: " + com.Peer.ID);
                     p.Client.Send(messageString);
+                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
                 }
             }
             catch (Exception e)
@@ -664,6 +679,7 @@ namespace SciChain
                 try
                 {
                     peer.Value.Client.Send(messageString);
+                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
                 }
                 catch (Exception e)
                 {
@@ -687,6 +703,7 @@ namespace SciChain
                 try
                 {
                     peer.Value.Client.Send(messageString);
+                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
                 }
                 catch (Exception e)
                 {
@@ -707,6 +724,7 @@ namespace SciChain
             try
             {
                 peer.Client.Send(messageString);
+                peer.Client.Receive(Encoding.UTF8.GetBytes(messageString));
             }
             catch (Exception e)
             {
@@ -740,7 +758,7 @@ namespace SciChain
             {
                 int revs = GetReviews(bl.Guid);
                 int fls = GetFlags(bl.Index);
-                if(revs > reviewers && fls < flags)
+                if(revs >= reviewers && fls < flags)
                 {
                     blocks.Add(bl);
                 }
@@ -938,13 +956,13 @@ namespace SciChain
 
         protected override void OnConnected()
         {
-            Console.WriteLine("Connected" + this.Server.Address);
+            Console.WriteLine("Connected: " + this.Server.Address);
             Blockchain.ConnectToPeer(this.Server.Address,new ChatClient(this.Server.Address, this.Server.Port),this.Server.Port);
         }
 
         protected override void OnDisconnected()
         {
-            Console.WriteLine("Disconnected" + this.Server.Address);
+            Console.WriteLine("Disconnected: " + this.Server.Address);
             Blockchain.Peers.Remove(this.Id);
         }
 
@@ -960,7 +978,7 @@ namespace SciChain
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error: {e.Message}");
+                Console.WriteLine("Error OnReceived:" + e.Message);
             }
         }
 
@@ -1023,14 +1041,6 @@ namespace SciChain
             {
                 Console.WriteLine("Error OnReceived:" + e.Message);
             }
-        }
-
-        public override long Receive(byte[] buffer)
-        {
-            string s = Encoding.UTF8.GetString(buffer);
-            var mes = JsonConvert.DeserializeObject<Blockchain.Message>(s);
-            Blockchain.ProcessMessage(mes);
-            return base.Receive(buffer);
         }
 
         protected override void OnError(SocketError error)
