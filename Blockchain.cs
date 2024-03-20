@@ -220,8 +220,6 @@ namespace SciChain
             return balance;
         }
 
-        
-
         public static decimal GetTreasury()
         {
             decimal balance = treasury;
@@ -293,6 +291,8 @@ namespace SciChain
 
         public static void AddPendingBlock(Block b)
         {
+            Directory.CreateDirectory(dir + "/Pending");
+            File.WriteAllText(dir + "/Pending/" + b.Guid + ".json",JsonConvert.SerializeObject(b));
             PendingBlocks.Add(b);
             BroadcastNewPendingBlock(b);
         }
@@ -546,6 +546,19 @@ namespace SciChain
                 Block b = JsonConvert.DeserializeObject<Block>(com.Content);
                 PendingBlocks.Add(b);
             }
+            else
+            if (message.Type == "GetPending")
+            {
+                var com = JsonConvert.DeserializeObject<GetCommand>(con);
+                SendPendingBlocksMessage(GetPeer(com.Peer.ID));
+            }
+            else
+            if(message.Type == "Pending")
+            {
+                var com = JsonConvert.DeserializeObject<GetCommand>(con);
+                List<Block> b = JsonConvert.DeserializeObject<List<Block>>(com.Content);
+                PendingBlocks.AddRange(b);
+            }
             // Handle other message types as necessary
         }
 
@@ -664,6 +677,53 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
+        public static void SendGetPendingBlocksMessage(GetCommand com)
+        {
+            var message = new Message
+            {
+                Type = "GetPending",
+                Content = JsonConvert.SerializeObject(com)
+            };
+            try
+            {
+                var messageString = JsonConvert.SerializeObject(message);
+                Peer p = GetPeer(com.Peer.ID);
+                if (p != null)
+                {
+                    Console.WriteLine("SendGetPendingBlocksMessage to: " + com.Peer.ID);
+                    p.Client.Send(messageString);
+                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error sending message to peer {com.Peer.ID} - {e.Message}");
+                // Handle error (e.g., remove peer from list)
+            }
+        }
+        public static void SendPendingBlocksMessage(Peer p)
+        {
+            var message = new Message
+            {
+                Type = "Pending",
+                Content = JsonConvert.SerializeObject(PendingBlocks)
+            };
+            try
+            {
+                var messageString = JsonConvert.SerializeObject(message);
+                if (p != null)
+                {
+                    Console.WriteLine("SendPendingBlocksMessage to: " + p.ID);
+                    p.Client.Send(messageString);
+                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error sending message to peer {p.ID} - {e.Message}");
+                // Handle error (e.g., remove peer from list)
+            }
+        }
         public static void BroadcastNewTransaction(Transaction tr)
         {
             var message = new Message
@@ -737,6 +797,11 @@ namespace SciChain
         {
             GetCommand com = new GetCommand(peer,"GetBlock",index.ToString());
             SendGetBlockMessage(com);
+        }
+        public static void GetPending(Peer peer)
+        {
+            GetCommand com = new GetCommand(peer, "GetPending","");
+            SendGetPendingBlocksMessage(com);
         }
         #endregion
 
@@ -934,7 +999,7 @@ namespace SciChain
                 {
                     GetBlock(Peers.First().Value, Chain.Count);
                 }
-                Thread.Sleep(1000);
+                Thread.Sleep(10000);
             } while (true);
         }
         public static void Load()
@@ -944,6 +1009,13 @@ namespace SciChain
                 var json = File.ReadAllText(f);
                 Block b = JsonConvert.DeserializeObject<Block>(json);
                 Chain.Add(b);
+            }
+            Directory.CreateDirectory(dir + "/Pending");
+            foreach (var f in Directory.GetFiles(dir + "/Pending"))
+            {
+                var json = File.ReadAllText(f);
+                Block b = JsonConvert.DeserializeObject<Block>(json);
+                PendingBlocks.Add(b);
             }
             Thread th = new Thread(GetBlockThread);
             th.Start();
@@ -971,15 +1043,6 @@ namespace SciChain
             string message = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
             // Multicast message to all connected sessions
             Server.Multicast(message);
-            try
-            {
-                var mes = JsonConvert.DeserializeObject<Blockchain.Message>(message);
-                Blockchain.ProcessMessage(mes);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error OnReceived:" + e.Message);
-            }
         }
 
         protected override void OnError(SocketError error)
