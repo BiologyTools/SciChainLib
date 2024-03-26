@@ -45,14 +45,19 @@ namespace SciChain
             public Type TransactionType { get; set; }
             public Transaction(Type t, string fromAddress, RSAParameters par, string toAddress, decimal amount)
             {
+                TransactionType = t;
                 FromAddress = fromAddress;
                 ToAddress = toAddress;
                 Amount = amount;
                 PublicKey = RSA.RSAParametersToString(par);
             }
-            public void SignTransaction(RSAParameters privateKey, string fromAddress)
+            public void SignTransaction(RSAParameters privateKey)
             {
-                var dataToSign = fromAddress + ToAddress + Amount.ToString();
+                string dataToSign;
+                if(FromAddress == null || FromAddress == "")
+                    dataToSign = ToAddress + Amount.ToString();
+                else
+                    dataToSign = FromAddress + ToAddress + Amount.ToString();
                 using (var rsa = new RSACryptoServiceProvider())
                 {
                     rsa.ImportParameters(privateKey);
@@ -68,16 +73,38 @@ namespace SciChain
         public string PreviousHash { get; set; } // The hash of the previous block
         public IList<Transaction> Transactions { get; set; }
         public string Hash { get; set; } // The block's hash
-        public string Guid { get; set; }
+        public string GUID { get; set; }
         public Document BlockDocument { get; set; }
         public class Document
         {
             public string DOI { get; set; }
+            public string PublicKey { get; set; }
+            public string Signature { get; set; }
             public IList<string> Publishers { get; set; }
-            public Document(string dOI, IList<string> publishers)
+            public Document(string dOI, IList<string> publishers, RSAParameters publicKey)
             {
                 DOI = dOI;
                 Publishers = publishers;
+                PublicKey = RSA.RSAParametersToString(publicKey);
+            }
+            [Newtonsoft.Json.JsonConstructor]
+            public Document(string dOI, IList<string> publishers, string publicKey)
+            {
+                DOI = dOI;
+                Publishers = publishers;
+                PublicKey = publicKey;
+            }
+            public void SignDocument(RSAParameters privateKey, string Address)
+            {
+                var dataToSign = Address + miningReward.ToString();
+                using (var rsa = new RSACryptoServiceProvider())
+                {
+                    rsa.ImportParameters(privateKey);
+                    var dataToSignBytes = Encoding.UTF8.GetBytes(dataToSign);
+                    var hasher = new SHA256Managed();
+                    var hashedData = hasher.ComputeHash(dataToSignBytes);
+                    Signature = Convert.ToBase64String(rsa.SignData(hashedData, CryptoConfig.MapNameToOID("SHA256")));
+                }
             }
         }
 
@@ -89,7 +116,7 @@ namespace SciChain
             PreviousHash = previousHash;
             Transactions = transactions;
             Hash = CalculateHash();
-            Guid = new Guid().ToString();
+            GUID = Guid.NewGuid().ToString();
         }
 
         public string CalculateHash()
@@ -132,10 +159,9 @@ namespace SciChain
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
         public static string IP;
         public static ChatServer Server;
-        public static void Initialize(Wallet wal, string id)
+        public static void Initialize(Wallet wal)
         {
             wallet = wal;
-            ID = id;
             Settings.Load();
             string h = Settings.GetSettings("Height");
             if(h!="")
@@ -184,7 +210,6 @@ namespace SciChain
                     {
                         balance -= trans.Amount;
                     }
-
                     if (trans.ToAddress == address)
                     {
                         balance += trans.Amount;
@@ -250,10 +275,51 @@ namespace SciChain
                         revs++;
                 }
             }
+            foreach (var trans in PendingTransactions)
+            {
+                if (trans.TransactionType != Transaction.Type.review)
+                    continue;
+                if (trans.Data == guid.ToString())
+                    revs++;
+            }
             return revs;
         }
 
-        public static int GetFlags(int index)
+        public static Transaction GetTransaction(string address,string type)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType.ToString() != type)
+                            continue;
+                        if (trans.ToAddress == address && trans.TransactionType.ToString() == type)
+                            return trans;
+                    }
+            }
+            return null;
+        }
+        public static Transaction GetTransaction(string signature)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.Signature == signature)
+                            return trans;
+                    }
+            }
+            foreach (var trans in PendingTransactions)
+            {
+                if (trans.Signature == signature)
+                    return trans;
+            }
+            return null;
+        }
+
+        public static int GetFlags(string guid)
         {
             int revs = 0;
             foreach (var block in Chain)
@@ -263,15 +329,36 @@ namespace SciChain
                     {
                         if (trans.TransactionType != Transaction.Type.flag)
                             continue;
-                        if (trans.Data == index.ToString())
+                        if (trans.Data == guid.ToString())
                             revs++;
                     }
             }
+            foreach (var trans in PendingTransactions)
+            {
+                if (trans.TransactionType != Transaction.Type.flag)
+                    continue;
+                if (trans.Data == guid.ToString())
+                    revs++;
+            }
             return revs;
+        }
+        public static Block GetPendingBlock(string guid)
+        {
+            foreach (var item in PendingBlocks)
+            {
+                if (item.GUID == guid)
+                    return item;
+            }
+            return null;
         }
 
         public static void AddBlock(Block block)
         {
+            foreach (var item in Chain)
+            {
+                if (item.Hash == block.Hash)
+                    return;
+            }
             Block latestBlock = GetLatestBlock();
             if (latestBlock != null)
             {
@@ -291,14 +378,23 @@ namespace SciChain
 
         public static void AddPendingBlock(Block b)
         {
+            foreach (var item in PendingBlocks)
+            {
+                if (item.GUID == b.GUID)
+                    return;
+            }
             Directory.CreateDirectory(dir + "/Pending");
-            File.WriteAllText(dir + "/Pending/" + b.Guid + ".json",JsonConvert.SerializeObject(b));
+            File.WriteAllText(dir + "/Pending/" + b.GUID + ".json",JsonConvert.SerializeObject(b));
             PendingBlocks.Add(b);
             BroadcastNewPendingBlock(b);
         }
 
         public static bool ProcessTransaction(Transaction transaction)
         {
+            //If this transaction has already been processed we skip and return false.)
+            if (GetTransaction(transaction.Signature) != null)
+                return false;
+            Console.WriteLine("Processing Transaction:" + transaction.TransactionType);
             if (!VerifyTransaction(transaction))
             {
                 Console.WriteLine("Transaction failed: Not a valid transaction.");
@@ -348,6 +444,18 @@ namespace SciChain
             {
                 transaction.Amount = gift;
                 PendingTransactions.Add(transaction);
+                int revs = GetReviews(transaction.Data);
+                int fls = GetFlags(transaction.Data);
+                Console.WriteLine("Block: " + transaction.Data + " Reviews: " + revs + " Flags: " + fls);
+                if(revs >= reviewers && fls <= flags)
+                {
+                    MineBlock(transaction.Data);
+                }
+            }
+            else if (transaction.TransactionType == Transaction.Type.flag)
+            {
+                transaction.Amount = gift;
+                PendingTransactions.Add(transaction);
             }
             else if (transaction.TransactionType == Transaction.Type.blockreward)
             {
@@ -393,10 +501,21 @@ namespace SciChain
         
         public static Peer? GetPeer(Guid guid)
         {
-            if (Peers.ContainsKey(guid))
-                return Peers[guid];
-            else
-                return null;
+            foreach (var item in Peers)
+            {
+                if (item.Value.Client.Id == guid)
+                    return item.Value;
+            }
+            return null;
+        }
+        public static Peer? GetPeer(string address)
+        {
+            foreach (var item in Peers)
+            {
+                if (item.Value.Address == address)
+                    return item.Value;
+            }
+            return null;
         }
 
         public class Peer
@@ -431,6 +550,11 @@ namespace SciChain
         {
             public string Type { get; set; } // E.g., "NewBlock", "NewTransaction", etc.
             public string Content { get; set; } // The actual message content, likely serialized data
+            public Message(string type, string content)
+            {
+                Type = type;
+                Content = content;
+            }
         }
 
         public class GetCommand
@@ -448,12 +572,14 @@ namespace SciChain
             }
         }
 
-        static Block block;
-        public static void ProcessMessage(Message message)
+        public static void ProcessMessage(Message message,Peer peer)
         {
-            // Implement message processing logic here
-            // For example, handling "NewBlock" messages:
             Console.WriteLine("Processsing message. " + message.Type);
+            if(peer == null)
+            {
+                Console.WriteLine("ProcessMessage:Peer is null");
+                return;
+            }
             string con = message.Content;
             if (message.Type == "NewBlock")
             {
@@ -525,83 +651,66 @@ namespace SciChain
                 if (h < Chain.Count)
                 {
                     Block b = Chain[h];
-                    GetCommand gc = new GetCommand(com.Peer, "Block", com.Data);
-                    gc.Content = JsonConvert.SerializeObject(b);
-                    SendBlockMessage(gc);
+                    SendBlockMessage(peer,b);
                     Console.WriteLine(message.Type + " " + com.Data);
                 }
+                else
+                {
+                    Console.WriteLine("Requested Block is higher than chain height.");
+                }
             }
-            else
-            if (message.Type == "Block")
-            {
-                var com = JsonConvert.DeserializeObject<GetCommand>(con);
-                Block b = JsonConvert.DeserializeObject<Block>(com.Content);
-                AddBlock(b);
-                BroadcastNewBlock(b);
-            }
-            else
             if(message.Type == "PendingBlock")
             {
-                var com = JsonConvert.DeserializeObject<GetCommand>(con);
-                Block b = JsonConvert.DeserializeObject<Block>(com.Content);
-                PendingBlocks.Add(b);
+                Block b = JsonConvert.DeserializeObject<Block>(message.Content);
+                if (b != null)
+                    AddPendingBlock(b);
+                else
+                    Console.WriteLine("Received empty block.");
             }
             else
             if (message.Type == "GetPending")
             {
                 var com = JsonConvert.DeserializeObject<GetCommand>(con);
-                SendPendingBlocksMessage(GetPeer(com.Peer.ID));
+                SendPendingBlocksMessage(peer,int.Parse(com.Data));
             }
             else
             if(message.Type == "Pending")
             {
-                var com = JsonConvert.DeserializeObject<GetCommand>(con);
-                List<Block> b = JsonConvert.DeserializeObject<List<Block>>(com.Content);
-                PendingBlocks.AddRange(b);
+                Block b = JsonConvert.DeserializeObject<Block>(message.Content);
+                AddPendingBlock(b);
             }
             // Handle other message types as necessary
         }
 
         public static void ConnectToPeer(string address, ChatClient client, int port)
         {
-            int tries = 0;
-            do
+            try
             {
-                try
+                foreach (var pr in Peers)
                 {
-                    foreach (var pr in Peers)
-                    {
-                        if (pr.Value.Address == address && pr.Value.Port == port)
-                            return;
-                    }
-                    Console.WriteLine("Adding peer:" + address + ":" + port);
-                    Peer p = new Peer(client.Id, client,address, port);
-                    Peers.Add(p.ID,p);
-                    p.Client.Connect();
+                    if (pr.Value.Address == address && pr.Value.Port == port)
+                        return;
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Error connecting to peer: " + e.Message);
-                }
-                Thread.Sleep(1000);
-                tries++;
-            } while (tries < 4);
+                Console.WriteLine("Adding peer:" + address + ":" + port);
+                Peer p = new Peer(client.Id, client,address, port);
+                Peers.Add(client.Id,p);
+                p.Client.Connect();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Error connecting to peer: " + e.Message);
+            }
         }
         public static void BroadcastNewBlock(Block block)
         {
-            var message = new Message
-            {
-                Type = "NewBlock",
-                Content = JsonConvert.SerializeObject(block)
-            };
-
-            var messageString = JsonConvert.SerializeObject(message);
             foreach (var peer in Peers)
             {
+                var message = new Message("NewBlock", JsonConvert.SerializeObject(block));
+                var messageString = JsonConvert.SerializeObject(message);
                 try
                 {
                     peer.Value.Client.Send(messageString);
-                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    peer.Value.Client.ReceiveAsync();
                 }
                 catch (Exception e)
                 {
@@ -612,19 +721,15 @@ namespace SciChain
         }
         public static void BroadcastNewPendingBlock(Block block)
         {
-            var message = new Message
-            {
-                Type = "PendingBlock",
-                Content = JsonConvert.SerializeObject(block)
-            };
-
-            var messageString = JsonConvert.SerializeObject(message);
+            
             foreach (var peer in Peers)
             {
+                var message = new Message("PendingBlock", JsonConvert.SerializeObject(block));
+            var messageString = JsonConvert.SerializeObject(message);
                 try
                 {
                     peer.Value.Client.Send(messageString);
-                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    peer.Value.Client.ReceiveAsync();
                 }
                 catch (Exception e)
                 {
@@ -635,17 +740,13 @@ namespace SciChain
         }
         public static void SendGetBlockMessage(GetCommand com)
         {
-            Console.WriteLine("Sending GetBlock Message");
-            var message = new Message
-            {
-                Type = "GetBlock",
-                Content = JsonConvert.SerializeObject(com)
-            };
+            Console.WriteLine("Sending GetBlock Message: " + com.Data);
+            var message = new Message("GetBlock", JsonConvert.SerializeObject(com));
             try
             {
                 var messageString = JsonConvert.SerializeObject(message);
                 com.Peer.Client.Send(messageString);
-                com.Peer.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                com.Peer.Client.ReceiveAsync();
             }
             catch (Exception e)
             {
@@ -653,46 +754,40 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
-        public static void SendBlockMessage(GetCommand com)
+        public static void SendBlockMessage(Peer p, Block b)
         {
-            var message = new Message
+            if(p == null)
             {
-                Type = "Block",
-                Content = JsonConvert.SerializeObject(com)
-            };
+                Console.WriteLine("SendBlockMessage: Peer is null.");
+                return;
+            }    
+            var message = new Message("NewBlock", JsonConvert.SerializeObject(b));
             try
             {
                 var messageString = JsonConvert.SerializeObject(message);
-                Peer p = GetPeer(com.Peer.ID);
-                if (p!=null)
-                {
-                    Console.WriteLine("SendBlockMessage to: " + com.Peer.ID);
-                    p.Client.Send(messageString);
-                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
-                }
+                Console.WriteLine("SendBlockMessage to: " + p.ID);
+                p.Client.Send(messageString);
+                p.Client.ReceiveAsync();
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error sending message to peer {com.Peer.ID} - {e.Message}");
+                Console.WriteLine($"Error sending message to peer {p.ID} - {e.Message}");
                 // Handle error (e.g., remove peer from list)
             }
         }
         public static void SendGetPendingBlocksMessage(GetCommand com)
         {
-            var message = new Message
-            {
-                Type = "GetPending",
-                Content = JsonConvert.SerializeObject(com)
-            };
+            var message = new Message("GetPending", JsonConvert.SerializeObject(com));
             try
             {
+
                 var messageString = JsonConvert.SerializeObject(message);
-                Peer p = GetPeer(com.Peer.ID);
+                Peer p = com.Peer;
                 if (p != null)
                 {
                     Console.WriteLine("SendGetPendingBlocksMessage to: " + com.Peer.ID);
                     p.Client.Send(messageString);
-                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    p.Client.ReceiveAsync();
                 }
             }
             catch (Exception e)
@@ -701,13 +796,9 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
-        public static void SendPendingBlocksMessage(Peer p)
+        public static void SendPendingBlocksMessage(Peer p,int index)
         {
-            var message = new Message
-            {
-                Type = "Pending",
-                Content = JsonConvert.SerializeObject(PendingBlocks)
-            };
+            var message = new Message("Pending", JsonConvert.SerializeObject(PendingBlocks[index-1]));
             try
             {
                 var messageString = JsonConvert.SerializeObject(message);
@@ -715,7 +806,7 @@ namespace SciChain
                 {
                     Console.WriteLine("SendPendingBlocksMessage to: " + p.ID);
                     p.Client.Send(messageString);
-                    p.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    p.Client.ReceiveAsync();
                 }
             }
             catch (Exception e)
@@ -726,20 +817,14 @@ namespace SciChain
         }
         public static void BroadcastNewTransaction(Transaction tr)
         {
-            var message = new Message
-            {
-                Type = "NewTransaction",
-                Content = JsonConvert.SerializeObject(tr)
-            };
-
-            var messageString = JsonConvert.SerializeObject(message);
-
             foreach (var peer in Peers)
             {
+                var message = new Message("NewTransaction", JsonConvert.SerializeObject(tr));
+                var messageString = JsonConvert.SerializeObject(message);
                 try
                 {
                     peer.Value.Client.Send(messageString);
-                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    peer.Value.Client.ReceiveAsync();
                 }
                 catch (Exception e)
                 {
@@ -750,20 +835,16 @@ namespace SciChain
         }
         public static void BroadcastNewPeer(Peer pr)
         {
-            var message = new Message
-            {
-                Type = "NewPeer",
-                Content = JsonConvert.SerializeObject(pr)
-            };
-            var messageString = JsonConvert.SerializeObject(message);
             foreach (var peer in Peers)
             {
+                var message = new Message("NewPeer", JsonConvert.SerializeObject(pr));
+                var messageString = JsonConvert.SerializeObject(message);
                 if (peer.Value == pr)
                     continue;
                 try
                 {
                     peer.Value.Client.Send(messageString);
-                    peer.Value.Client.Receive(Encoding.UTF8.GetBytes(messageString));
+                    peer.Value.Client.ReceiveAsync();
                 }
                 catch (Exception e)
                 {
@@ -774,12 +855,7 @@ namespace SciChain
         }
         public static void BroadcastPeerList(Peer[] pr,Peer peer)
         {
-            var message = new Message
-            {
-                Type = "Peers",
-                Content = JsonConvert.SerializeObject(pr)
-            };
-
+            var message = new Message("Peers", JsonConvert.SerializeObject(pr));
             var messageString = JsonConvert.SerializeObject(message);
             try
             {
@@ -798,32 +874,33 @@ namespace SciChain
             GetCommand com = new GetCommand(peer,"GetBlock",index.ToString());
             SendGetBlockMessage(com);
         }
-        public static void GetPending(Peer peer)
+        public static void GetPending(Peer peer, int index)
         {
-            GetCommand com = new GetCommand(peer, "GetPending","");
+            GetCommand com = new GetCommand(peer, "GetPending",index.ToString());
             SendGetPendingBlocksMessage(com);
         }
         #endregion
 
-        public static void MineBlock(string minerAddress,Document doc,RSAParameters par)
+        public static void MineBlock(string GUID)
         {
-            if (GetReputation(minerAddress) < 0)
-                return;
+            Console.WriteLine("Mining Block:" + GUID);
+            Block block = GetPendingBlock(GUID);
+            if (GetReputation(block.BlockDocument.Publishers[0]) < 0)
+            {
+                Console.WriteLine("Not enough reputation for publishing: " + block.BlockDocument.Publishers[0]);
+            }
             List<Transaction> transactions = new List<Transaction>();
             foreach (var transaction in PendingTransactions)
             {
                 if(VerifyTransaction(transaction))
                     transactions.Add(transaction);
             }
-            var block = new Block(DateTime.Now, GetLatestBlock().Hash, transactions);
-            block.BlockDocument = doc;
-            AddPendingBlock(block);
             List<Block> blocks = new List<Block>();
             foreach (var bl in PendingBlocks)
             {
-                int revs = GetReviews(bl.Guid);
-                int fls = GetFlags(bl.Index);
-                if(revs >= reviewers && fls < flags)
+                int revs = GetReviews(bl.GUID);
+                int fls = GetFlags(bl.GUID);
+                if(revs >= reviewers && fls <= flags)
                 {
                     blocks.Add(bl);
                 }
@@ -836,15 +913,18 @@ namespace SciChain
                     if (i == 0)
                         bl.Transactions = transactions;
                     AddBlock(bl);
-                    ProcessTransaction(new Transaction(Transaction.Type.blockreward, null, par, minerAddress, miningReward));
-                    ProcessTransaction(new Transaction(Transaction.Type.addreputation, null, par, minerAddress, 1));
+                    RSAParameters par = RSA.StringToRSAParameters(block.BlockDocument.PublicKey);
+                    ProcessTransaction(new Transaction(Transaction.Type.blockreward, null, par, block.BlockDocument.Publishers[0], miningReward));
+                    ProcessTransaction(new Transaction(Transaction.Type.addreputation, null, par, block.BlockDocument.Publishers[0], 1));
+                    File.Delete(dir + "/Pending/" + bl.GUID + ".json");
+                    BroadcastNewBlock(bl);
                 }
                 PendingBlocks = new List<Block>();
                 // Reset the pending transactions
                 PendingTransactions = new List<Transaction>();
-                if (currentSupply < totalSupply)
-                    currentSupply += miningReward * blocks.Count;
+                currentSupply += miningReward * blocks.Count;
             }
+            
         }
 
         public class Wallet
@@ -901,7 +981,7 @@ namespace SciChain
             public void Save(string password)
             {
                 string path = Path.GetDirectoryName(Environment.ProcessPath);
-                EncryptAndSaveKeys(RSA.RSAParametersToString(PublicKey), RSA.RSAParametersToString(PrivateKey), password,path + "/wallet.dat");
+                EncryptAndSaveKeys(RSA.RSAParametersToString(PublicKey), RSA.RSAParametersToStringAll(PrivateKey), password,path + "/wallet.dat");
             }
             public static void ReadAndDecryptKeys(string password, string filePath, out string publicKey, out string privateKey)
             {
@@ -1000,6 +1080,10 @@ namespace SciChain
                     GetBlock(Peers.First().Value, Chain.Count);
                 }
                 Thread.Sleep(10000);
+                if (Peers.Count > 0)
+                {
+                    GetPending(Peers.First().Value, Chain.Count);
+                }
             } while (true);
         }
         public static void Load()
@@ -1078,6 +1162,7 @@ namespace SciChain
         protected override void OnConnected()
         {
             Console.WriteLine($"Chat TCP client connected a new session with Id {Id}");
+
         }
 
         protected override void OnDisconnected()
@@ -1095,17 +1180,53 @@ namespace SciChain
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             string s = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
-            try
+            List<string> msg = new List<string>();
+            msg.AddRange(GetMessage(s));
+            foreach (string st in msg)
             {
-                var mes = JsonConvert.DeserializeObject<Blockchain.Message>(s);
-                Blockchain.ProcessMessage(mes);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error OnReceived:" + e.Message);
+                try
+                {
+                    var mes = JsonConvert.DeserializeObject<Blockchain.Message>(st);
+                    Peer peer = GetPeer(Id);
+                    if(peer == null)
+                    {
+                        Console.WriteLine("Adding Peer:" + Address + " " + Id);
+                        ConnectToPeer(Address, this, Port);
+                        peer = GetPeer(Id);
+                    }
+                    Blockchain.ProcessMessage(mes,peer);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Error OnReceived:" + e.Message);
+                }
             }
         }
-
+        private string[] GetMessage(string s)
+        {
+            List<string> sts = new List<string>();
+            string st = "";
+            int scope = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                st += s[i];
+                if (s[i] == '{')
+                {
+                    scope++;
+                }
+                else
+                if (s[i] == '}')
+                {
+                    scope--;
+                    if (scope == 0)
+                    {
+                        sts.Add(st);
+                        st = "";
+                    }
+                }
+            }
+            return sts.ToArray();
+        }
         protected override void OnError(SocketError error)
         {
             Console.WriteLine($"Chat TCP client caught an error with code {error}");
