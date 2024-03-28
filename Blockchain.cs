@@ -157,7 +157,6 @@ namespace SciChain
         public const int flags = 0;
         static string dir = System.IO.Path.GetDirectoryName(Environment.ProcessPath);
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
-        public static string IP;
         public static ChatServer Server;
         public static void Initialize(Wallet wal)
         {
@@ -168,7 +167,6 @@ namespace SciChain
             currentHeight = int.Parse(h);
             Chain = new List<Block>();
             Directory.CreateDirectory(dir + "/Blocks");
-            IP = new System.Net.WebClient().DownloadString("https://api.ipify.org");
             Server = new ChatServer(IPAddress.Any, 8333);
             Server.OptionKeepAlive = true;
             bool start = Server.Start();
@@ -285,22 +283,20 @@ namespace SciChain
             return revs;
         }
 
-        public static Transaction GetTransaction(string address,string type)
+        public static Transaction GetTransaction(Transaction tr)
         {
             foreach (var block in Chain)
             {
                 if (block.Transactions != null)
                     foreach (var trans in block.Transactions)
                     {
-                        if (trans.TransactionType.ToString() != type)
-                            continue;
-                        if (trans.ToAddress == address && trans.TransactionType.ToString() == type)
+                        if(tr == trans)
                             return trans;
                     }
             }
             return null;
         }
-        public static Transaction GetTransaction(string signature)
+        public static Transaction GetTransaction(string signature,bool searchPending = false)
         {
             foreach (var block in Chain)
             {
@@ -311,6 +307,7 @@ namespace SciChain
                             return trans;
                     }
             }
+            if(searchPending)
             foreach (var trans in PendingTransactions)
             {
                 if (trans.Signature == signature)
@@ -372,7 +369,7 @@ namespace SciChain
 
         public static void AddTransaction(Transaction transaction)
         {
-            PendingTransactions.Add(transaction);
+            //PendingTransactions.Add(transaction);
             BroadcastNewTransaction(transaction);
         }
 
@@ -392,8 +389,12 @@ namespace SciChain
         public static bool ProcessTransaction(Transaction transaction)
         {
             //If this transaction has already been processed we skip and return false.)
-            if (GetTransaction(transaction.Signature) != null)
+            if(transaction.Signature != null)
+            if (GetTransaction(transaction) != null)
+            {
+                Console.WriteLine("Processing Transaction: Skipping already processed transaction.");
                 return false;
+            }
             Console.WriteLine("Processing Transaction:" + transaction.TransactionType);
             if (!VerifyTransaction(transaction))
             {
@@ -425,7 +426,7 @@ namespace SciChain
                 {
                     foreach (Transaction t in item.Transactions)
                     {
-                        if(t.TransactionType == Transaction.Type.registration && t.ToAddress != transaction.ToAddress)
+                        if(t.TransactionType == Transaction.Type.registration && t.ToAddress == transaction.ToAddress)
                         {
                             found = true;
                             break;
@@ -442,8 +443,8 @@ namespace SciChain
             }
             else if (transaction.TransactionType == Transaction.Type.review)
             {
-                transaction.Amount = gift;
                 PendingTransactions.Add(transaction);
+                transaction.Amount = gift;
                 int revs = GetReviews(transaction.Data);
                 int fls = GetFlags(transaction.Data);
                 Console.WriteLine("Block: " + transaction.Data + " Reviews: " + revs + " Flags: " + fls);
@@ -472,19 +473,21 @@ namespace SciChain
                 transaction.Amount = 10;
                 PendingTransactions.Add(transaction);
             }
-            BroadcastNewTransaction(transaction);
+            //BroadcastNewTransaction(transaction);
             return true;
         }
         public static bool VerifyTransaction(Transaction transaction)
         {
-            if (transaction.TransactionType != Transaction.Type.transaction)
-                return true;
             using (var rsa = new RSACryptoServiceProvider())
             {
                 try
                 {
                     rsa.ImportParameters(RSA.StringToRSAParameters(transaction.PublicKey));
-                    var dataToVerify = transaction.FromAddress + transaction.ToAddress + transaction.Amount.ToString();
+                    string dataToVerify;
+                    if(transaction.FromAddress == null || transaction.FromAddress == "")
+                        dataToVerify = transaction.ToAddress + transaction.Amount.ToString();
+                    else
+                        dataToVerify = transaction.FromAddress + transaction.ToAddress + transaction.Amount.ToString();
                     var dataToVerifyBytes = Encoding.UTF8.GetBytes(dataToVerify);
                     var hasher = new SHA256Managed();
                     var hashedData = hasher.ComputeHash(dataToVerifyBytes);
@@ -503,7 +506,7 @@ namespace SciChain
         {
             foreach (var item in Peers)
             {
-                if (item.Value.Client.Id == guid)
+                if (item.Value.ID == guid || item.Value.Client.Id == guid)
                     return item.Value;
             }
             return null;
@@ -592,7 +595,6 @@ namespace SciChain
             {
                 var tr = JsonConvert.DeserializeObject<Transaction>(con);
                 ProcessTransaction(tr);
-                Console.WriteLine(message.Type + " " + tr.FromAddress + " to " + tr.ToAddress + " " + tr.Amount + " " + tr.Signature);
             }
             else
             if(message.Type == "NewPeer")
@@ -798,6 +800,8 @@ namespace SciChain
         }
         public static void SendPendingBlocksMessage(Peer p,int index)
         {
+            if (index > PendingBlocks.Count)
+                return;
             var message = new Message("Pending", JsonConvert.SerializeObject(PendingBlocks[index-1]));
             try
             {
@@ -914,8 +918,12 @@ namespace SciChain
                         bl.Transactions = transactions;
                     AddBlock(bl);
                     RSAParameters par = RSA.StringToRSAParameters(block.BlockDocument.PublicKey);
-                    ProcessTransaction(new Transaction(Transaction.Type.blockreward, null, par, block.BlockDocument.Publishers[0], miningReward));
-                    ProcessTransaction(new Transaction(Transaction.Type.addreputation, null, par, block.BlockDocument.Publishers[0], 1));
+                    Transaction br = new Transaction(Transaction.Type.blockreward, null, par, block.BlockDocument.Publishers[0], miningReward);
+                    br.SignTransaction(wallet.PrivateKey);
+                    ProcessTransaction(br);
+                    Transaction rep = new Transaction(Transaction.Type.addreputation, null, par, block.BlockDocument.Publishers[0], 1);
+                    rep.SignTransaction(wallet.PrivateKey);
+                    ProcessTransaction(rep);
                     File.Delete(dir + "/Pending/" + bl.GUID + ".json");
                     BroadcastNewBlock(bl);
                 }
