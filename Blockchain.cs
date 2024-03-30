@@ -147,7 +147,7 @@ namespace SciChain
         public const long population = 10000000000;
         //With the treasury we can give each user 0.01 coins. But we give only 0.005 so that half of the treasury is left for developement.
         public const decimal gift = 0.005M;
-        public static decimal currentSupply = treasury;
+        public static decimal currentSupply = treasury + founder;
         public const decimal miningReward = 10;
         public const int maxPeers = 8;
         public const int port = 8333;
@@ -173,15 +173,15 @@ namespace SciChain
             Console.WriteLine("Started:" + start);
         }
 
-        public static void AddGenesisBlock(Wallet wallet, string ID)
+        public static void AddGenesisBlock(Wallet wallet)
         {
             if(Chain.Count == 0)
-            Chain.Add(CreateGenesisBlock(wallet,ID));
+            AddBlock(CreateGenesisBlock(wallet));
         }
 
-        private static Block CreateGenesisBlock(Wallet wallet, string ID)
+        private static Block CreateGenesisBlock(Wallet wallet)
         {
-            Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, ID, founder);
+            Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "0009-0007-0687-6045", founder);
             List<Transaction> trs = new List<Transaction>();
             trs.Add(tr);
             return new Block(DateTime.Now, null, trs);
@@ -365,11 +365,17 @@ namespace SciChain
                 Chain.Add(block);
                 Save(block);
             }
+            else
+            {
+                block.Index = 0;
+                block.Hash = block.CalculateHash();
+                Chain.Add(block);
+                Save(block);
+            }
         }
 
         public static void AddTransaction(Transaction transaction)
         {
-            //PendingTransactions.Add(transaction);
             BroadcastNewTransaction(transaction);
         }
 
@@ -385,7 +391,12 @@ namespace SciChain
             PendingBlocks.Add(b);
             BroadcastNewPendingBlock(b);
         }
-
+        private static void SavePendingTransaction(Transaction transaction)
+        {
+            Directory.CreateDirectory(dir + "/PendingTransactions");
+            PendingTransactions.Add(transaction);
+            File.WriteAllText(Guid.NewGuid().ToString() + ".json",JsonConvert.SerializeObject(transaction));
+        }
         public static bool ProcessTransaction(Transaction transaction)
         {
             //If this transaction has already been processed we skip and return false.)
@@ -401,6 +412,8 @@ namespace SciChain
                 Console.WriteLine("Transaction failed: Not a valid transaction.");
                 return false;
             }
+            Directory.CreateDirectory(dir + "/PendingTransactions");
+
             if (transaction.TransactionType == Transaction.Type.transaction)
             {
                 // Proceed with adding the transaction
@@ -414,7 +427,7 @@ namespace SciChain
                         return false;
                     }
                 }
-                PendingTransactions.Add(transaction);
+                SavePendingTransaction(transaction);
             }
             else if (transaction.TransactionType == Transaction.Type.registration)
             {
@@ -438,16 +451,16 @@ namespace SciChain
                 if(!found)
                 {
                     treasuryBalance -= gift;
-                    PendingTransactions.Add(transaction);
+                    SavePendingTransaction(transaction);
                 }
             }
             else if (transaction.TransactionType == Transaction.Type.review)
             {
-                PendingTransactions.Add(transaction);
                 transaction.Amount = gift;
                 int revs = GetReviews(transaction.Data);
                 int fls = GetFlags(transaction.Data);
                 Console.WriteLine("Block: " + transaction.Data + " Reviews: " + revs + " Flags: " + fls);
+                SavePendingTransaction(transaction);
                 if(revs >= reviewers && fls <= flags)
                 {
                     MineBlock(transaction.Data);
@@ -456,24 +469,23 @@ namespace SciChain
             else if (transaction.TransactionType == Transaction.Type.flag)
             {
                 transaction.Amount = gift;
-                PendingTransactions.Add(transaction);
+                SavePendingTransaction(transaction);
             }
             else if (transaction.TransactionType == Transaction.Type.blockreward)
             {
-                transaction.Amount = miningReward; 
-                PendingTransactions.Add(transaction);
+                transaction.Amount = miningReward;
+                SavePendingTransaction(transaction);
             }
             else if (transaction.TransactionType == Transaction.Type.addreputation)
             {
                 transaction.Amount = 1;
-                PendingTransactions.Add(transaction);
+                SavePendingTransaction(transaction);
             }
             else if (transaction.TransactionType == Transaction.Type.removereputation)
             {
                 transaction.Amount = 10;
-                PendingTransactions.Add(transaction);
+                SavePendingTransaction(transaction);
             }
-            //BroadcastNewTransaction(transaction);
             return true;
         }
         public static bool VerifyTransaction(Transaction transaction)
@@ -574,21 +586,25 @@ namespace SciChain
                 Content = "";
             }
         }
-
         public static void ProcessMessage(Message message,Peer peer)
         {
             Console.WriteLine("Processsing message. " + message.Type);
             if(peer == null)
             {
-                Console.WriteLine("ProcessMessage:Peer is null");
+                Console.WriteLine("ProcessMessage: Peer is null");
                 return;
             }
             string con = message.Content;
             if (message.Type == "NewBlock")
             {
                 var block = JsonConvert.DeserializeObject<Block>(con);
-                AddBlock(block);
-                Console.WriteLine(message.Type + " " + block.Hash);
+                if (block.Index != Chain.Last().Index)
+                {
+                    AddBlock(block);
+                    Console.WriteLine(message.Type + " " + block.Hash);
+                }
+                else
+                    loaded = true;
             }
             else
             if (message.Type == "NewTransaction")
@@ -648,7 +664,7 @@ namespace SciChain
                 int h = int.Parse(com.Data);
                 if (Chain.Count == 0)
                 {
-                    AddGenesisBlock(wallet,ID);
+                    AddGenesisBlock(wallet);
                 }
                 if (h < Chain.Count)
                 {
@@ -930,6 +946,7 @@ namespace SciChain
                 PendingBlocks = new List<Block>();
                 // Reset the pending transactions
                 PendingTransactions = new List<Transaction>();
+                Directory.Delete(dir + "/PendingTransactions");
                 currentSupply += miningReward * blocks.Count;
             }
             
@@ -1087,6 +1104,10 @@ namespace SciChain
                 {
                     GetBlock(Peers.First().Value, Chain.Count);
                 }
+                Thread.Sleep(100);
+            } while (!loaded);
+            do
+            {
                 Thread.Sleep(10000);
                 if (Peers.Count > 0)
                 {
@@ -1101,6 +1122,13 @@ namespace SciChain
                 var json = File.ReadAllText(f);
                 Block b = JsonConvert.DeserializeObject<Block>(json);
                 Chain.Add(b);
+            }
+            if(Directory.Exists(dir + "/PendingTransactions/"))
+            foreach (var f in Directory.GetFiles(dir + "/PendingTransactions/"))
+            {
+                var json = File.ReadAllText(f);
+                Transaction t = JsonConvert.DeserializeObject<Transaction>(json);
+                PendingTransactions.Add(t);
             }
             Directory.CreateDirectory(dir + "/Pending");
             foreach (var f in Directory.GetFiles(dir + "/Pending"))
