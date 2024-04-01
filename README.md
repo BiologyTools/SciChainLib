@@ -19,7 +19,7 @@ string address = Blockchain.CalculateHash(st);
 //Getting the balance of the wallet from the chain.
 string balance = Blockchain.GetBalance(GUID).ToString();
 //We create a new transaction
-Block.Transaction tr = new Block.Transaction(Block.Transaction.Type.transaction, GUID, wallet.PublicKey, addrBox.Text, amountBox.Value);
+Block.Transaction tr = new Block.Transaction(Block.Transaction.Type.transaction, address, wallet.PublicKey, addrBox.Text, amountBox.Value);
 //Then we sign the transaction with our private key. All transactions need to be signed outherwise they will not be processed.
 tr.SignTransaction(wallet.PrivateKey);
 //Then we add the transaction to the chain's pending transactions. This will also broadcast the transaction to all connected peers.
