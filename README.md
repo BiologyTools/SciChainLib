@@ -17,7 +17,7 @@ Blockchain.Load();
 string st = RSA.RSAParametersToStringAll(wallet.PrivateKey);
 string address = Blockchain.CalculateHash(st);
 //Getting the balance of the wallet from the chain.
-string balance = Blockchain.GetBalance(GUID).ToString();
+string balance = Blockchain.GetBalance(address).ToString();
 //We create a new transaction
 Block.Transaction tr = new Block.Transaction(Block.Transaction.Type.transaction, address, wallet.PublicKey, addrBox.Text, amountBox.Value);
 //Then we sign the transaction with our private key. All transactions need to be signed outherwise they will not be processed.
