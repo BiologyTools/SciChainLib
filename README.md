@@ -1,6 +1,7 @@
 # SciChainLib
  SciChain Blockchain Library
-
+ 
+[![NuGet version (SciChainLib)](https://img.shields.io/nuget/v/SciChainLib.svg)](https://www.nuget.org/packages/SciChainLib/0.2.1) ![Nuget](https://img.shields.io/nuget/dt/SciChainLib)
 # Example Usage
 ```
 //First we create/load our wallet with a password.
