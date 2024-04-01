@@ -20,6 +20,7 @@ using System.Reflection;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using static SciChain.Blockchain;
+using System.Globalization;
 namespace SciChain
 {
     public class Block
@@ -51,13 +52,20 @@ namespace SciChain
                 Amount = amount;
                 PublicKey = RSA.RSAParametersToString(par);
             }
+            public static string DecimalToStringWithMaxDecimals(decimal value)
+            {
+                // Using "0.############################" to ensure up to 28 decimal places
+                // This format string includes a digit placeholder to the left of the decimal point
+                // and up to 28 # characters after the decimal point, which represent optional digits.
+                return value.ToString("0.############################");
+            }
             public void SignTransaction(RSAParameters privateKey)
             {
                 string dataToSign;
                 if(FromAddress == null || FromAddress == "")
-                    dataToSign = ToAddress + Amount.ToString();
+                    dataToSign = ToAddress + DecimalToStringWithMaxDecimals(Amount);
                 else
-                    dataToSign = FromAddress + ToAddress + Amount.ToString();
+                    dataToSign = FromAddress + ToAddress + DecimalToStringWithMaxDecimals(Amount);
                 using (var rsa = new RSACryptoServiceProvider())
                 {
                     rsa.ImportParameters(privateKey);
@@ -348,13 +356,30 @@ namespace SciChain
             }
             return null;
         }
-
+        public static string CalculateHash(string st)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(st));
+                return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+            }
+        }
         public static void AddBlock(Block block)
         {
             foreach (var item in Chain)
             {
                 if (item.Hash == block.Hash)
                     return;
+            }
+            for (var i = 0; i < PendingTransactions.Count; i++)
+            {
+                if (block.Transactions.Contains(PendingTransactions[i]))
+                {
+                    string g = CalculateHash(PendingTransactions[i].Signature) + ".json";
+                    if(File.Exists(g))
+                    File.Delete(g);
+                    PendingTransactions.RemoveAt(i);
+                }
             }
             Block latestBlock = GetLatestBlock();
             if (latestBlock != null)
@@ -395,7 +420,7 @@ namespace SciChain
         {
             Directory.CreateDirectory(dir + "/PendingTransactions");
             PendingTransactions.Add(transaction);
-            File.WriteAllText(Guid.NewGuid().ToString() + ".json",JsonConvert.SerializeObject(transaction));
+            File.WriteAllText(dir + "/PendingTransactions/" + CalculateHash(transaction.Signature) + ".json",JsonConvert.SerializeObject(transaction));
         }
         public static bool ProcessTransaction(Transaction transaction)
         {
@@ -437,6 +462,7 @@ namespace SciChain
                 bool found = false;
                 foreach (Block item in Chain)
                 {
+                    if(item.Transactions!=null && item.Transactions.Count > 0)
                     foreach (Transaction t in item.Transactions)
                     {
                         if(t.TransactionType == Transaction.Type.registration && t.ToAddress == transaction.ToAddress)
@@ -497,9 +523,9 @@ namespace SciChain
                     rsa.ImportParameters(RSA.StringToRSAParameters(transaction.PublicKey));
                     string dataToVerify;
                     if(transaction.FromAddress == null || transaction.FromAddress == "")
-                        dataToVerify = transaction.ToAddress + transaction.Amount.ToString();
+                        dataToVerify = transaction.ToAddress + Transaction.DecimalToStringWithMaxDecimals(transaction.Amount);
                     else
-                        dataToVerify = transaction.FromAddress + transaction.ToAddress + transaction.Amount.ToString();
+                        dataToVerify = transaction.FromAddress + transaction.ToAddress + Transaction.DecimalToStringWithMaxDecimals(transaction.Amount);
                     var dataToVerifyBytes = Encoding.UTF8.GetBytes(dataToVerify);
                     var hasher = new SHA256Managed();
                     var hashedData = hasher.ComputeHash(dataToVerifyBytes);
@@ -598,6 +624,8 @@ namespace SciChain
             if (message.Type == "NewBlock")
             {
                 var block = JsonConvert.DeserializeObject<Block>(con);
+                if (block == null)
+                    loaded = true;
                 if (block.Index != Chain.Last().Index)
                 {
                     AddBlock(block);
@@ -675,6 +703,7 @@ namespace SciChain
                 else
                 {
                     Console.WriteLine("Requested Block is higher than chain height.");
+                    loaded = true;
                 }
             }
             if(message.Type == "PendingBlock")
@@ -1121,7 +1150,7 @@ namespace SciChain
             {
                 var json = File.ReadAllText(f);
                 Block b = JsonConvert.DeserializeObject<Block>(json);
-                Chain.Add(b);
+                AddBlock(b);
             }
             if(Directory.Exists(dir + "/PendingTransactions/"))
             foreach (var f in Directory.GetFiles(dir + "/PendingTransactions/"))
