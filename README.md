@@ -1,5 +1,5 @@
-# SciChainLib
- SciChain Blockchain Library
+# SciChainLib - SciChain Blockchain Library
+For usage see the example below or check out the [documentation.](https://biologytools.github.io/Documentation/SciChainLib/)
  
 [![NuGet version (SciChainLib)](https://img.shields.io/nuget/v/SciChainLib.svg)](https://www.nuget.org/packages/SciChainLib/0.2.1) ![Nuget](https://img.shields.io/nuget/dt/SciChainLib)
 # Example Usage
