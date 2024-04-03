@@ -52,12 +52,12 @@
     <!-- Also defines .app file name -->
     <CFBundleDisplayName>SciChain</CFBundleDisplayName>
     <CFBundleIdentifier>com.SciChain</CFBundleIdentifier>
-    <CFBundleVersion>0.3.0</CFBundleVersion>
+    <CFBundleVersion>0.3.1</CFBundleVersion>
     <CFBundlePackageType>APPL</CFBundlePackageType>
     <CFBundleSignature>????</CFBundleSignature>
     <CFBundleExecutable>SciChain</CFBundleExecutable>
     <CFBundleIconFile>scichain.icns</CFBundleIconFile>
-    <CFBundleShortVersionString>0.3.0</CFBundleShortVersionString>
+    <CFBundleShortVersionString>0.3.1</CFBundleShortVersionString>
     <!-- Will be copied from output directory -->
     <NSPrincipalClass>NSApplication</NSPrincipalClass>
     <NSHighResolutionCapable>true</NSHighResolutionCapable>

@@ -44,6 +44,14 @@ namespace SciChain
             public string Data { get; set; }
             public string Signature { get; set; }
             public Type TransactionType { get; set; }
+            /* The above code is defining a constructor for a `Transaction` class in C#. The
+            constructor takes in parameters for the transaction type (`Type t`), the sender's
+            address (`string fromAddress`), RSA parameters (`RSAParameters par`), the recipient's
+            address (`string toAddress`), and the transaction amount (`decimal amount`). Inside the
+            constructor, it assigns these values to the corresponding properties of the
+            `Transaction` class - `TransactionType`, `FromAddress`, `ToAddress`, `Amount`, and
+            `PublicKey`. The `PublicKey` property is set by converting the RSA parameters to a
+            string using */
             public Transaction(Type t, string fromAddress, RSAParameters par, string toAddress, decimal amount)
             {
                 TransactionType = t;
@@ -52,6 +60,17 @@ namespace SciChain
                 Amount = amount;
                 PublicKey = RSA.RSAParametersToString(par);
             }
+            /// <summary>
+            /// The function DecimalToStringWithMaxDecimals converts a decimal value to a string with up
+            /// to 28 decimal places.
+            /// </summary>
+            /// <param name="value">The `DecimalToStringWithMaxDecimals` method takes a `decimal` value
+            /// as input and converts it to a string with up to 28 decimal places. The method uses a
+            /// specific format string "0.</param>
+            /// <returns>
+            /// The method `DecimalToStringWithMaxDecimals` returns a string representation of the
+            /// decimal value with up to 28 decimal places. It uses the format string "0.
+            /// </returns>
             public static string DecimalToStringWithMaxDecimals(decimal value)
             {
                 // Using "0.############################" to ensure up to 28 decimal places
@@ -59,6 +78,14 @@ namespace SciChain
                 // and up to 28 # characters after the decimal point, which represent optional digits.
                 return value.ToString("0.############################");
             }
+            /// <summary>
+            /// The SignTransaction function signs transaction data using RSA encryption with a private
+            /// key.
+            /// </summary>
+            /// <param name="RSAParameters">RSAParameters is a struct that represents the RSA key
+            /// parameters. It contains the components of an RSA key pair, including the modulus,
+            /// exponent, and other key-specific values needed for encryption and decryption
+            /// operations.</param>
             public void SignTransaction(RSAParameters privateKey)
             {
                 string dataToSign;
@@ -83,6 +110,9 @@ namespace SciChain
         public string Hash { get; set; } // The block's hash
         public string GUID { get; set; }
         public Document BlockDocument { get; set; }
+        /* The `Document` class in C# represents a document with properties such as DOI, PublicKey,
+        Signature, and Publishers, and includes methods for signing the document using RSA
+        encryption. */
         public class Document
         {
             public string DOI { get; set; }
@@ -117,6 +147,13 @@ namespace SciChain
         }
 
 
+        /* The above code is defining a constructor for a class named `Block` in C#. The constructor
+        takes in parameters for a `DateTime` object `timeStamp`, a `string` `previousHash`, and a
+        list of `Transaction` objects `transactions`. Inside the constructor, the `Index` is set to
+        0, the `TimeStamp`, `PreviousHash`, and `Transactions` properties are assigned the values
+        passed in as parameters. The `Hash` property is then calculated using a method
+        `CalculateHash()`, and the `GUID` property is set to a new unique identifier generated using
+        `Guid */
         public Block(DateTime timeStamp, string previousHash, IList<Transaction> transactions)
         {
             Index = 0;
@@ -127,6 +164,15 @@ namespace SciChain
             GUID = Guid.NewGuid().ToString();
         }
 
+       /// <summary>
+       /// The CalculateHash function generates a SHA256 hash based on a combination of timestamp,
+       /// previous hash, and serialized transactions.
+       /// </summary>
+       /// <returns>
+       /// The method CalculateHash is returning a lowercase hexadecimal string representation of the
+       /// SHA-256 hash value calculated from the concatenation of the TimeStamp, PreviousHash (if not
+       /// null), and the serialized Transactions in JSON format.
+       /// </returns>
         public string CalculateHash()
         {
             using (SHA256 sha256 = SHA256.Create())
@@ -166,6 +212,13 @@ namespace SciChain
         static string dir = System.IO.Path.GetDirectoryName(Environment.ProcessPath);
         public static Dictionary<Guid,Peer> Peers { set; get; } = new Dictionary<Guid, Peer>();
         public static ChatServer Server;
+       /// <summary>
+       /// The Initialize function initializes a wallet, loads settings, sets current height, creates a
+       /// chain list, creates a directory, starts a chat server, and prints a message indicating if the
+       /// server started successfully.
+       /// </summary>
+       /// <param name="Wallet">A wallet object that contains information about a user's cryptocurrency
+       /// wallet.</param>
         public static void Initialize(Wallet wal)
         {
             wallet = wal;
@@ -181,12 +234,30 @@ namespace SciChain
             Console.WriteLine("Started:" + start);
         }
 
+        /// <summary>
+        /// The function `AddGenesisBlock` adds a genesis block to the blockchain if the chain is empty.
+        /// </summary>
+        /// <param name="Wallet">The `Wallet` parameter is an object representing a digital wallet that
+        /// stores a user's cryptocurrency holdings and allows them to send and receive transactions on
+        /// the blockchain network.</param>
         public static void AddGenesisBlock(Wallet wallet)
         {
             if(Chain.Count == 0)
             AddBlock(CreateGenesisBlock(wallet));
         }
 
+        /// <summary>
+        /// The function CreateGenesisBlock creates a genesis block with a block reward transaction for
+        /// a given wallet.
+        /// </summary>
+        /// <param name="Wallet">A wallet object that contains the public and private keys for a user's
+        /// cryptocurrency transactions.</param>
+        /// <returns>
+        /// The `CreateGenesisBlock` method is returning a `Block` object. This block is created with
+        /// the current date and time (DateTime.Now), has no previous block hash (null), and contains a
+        /// list of transactions (trs) with a single transaction (tr) representing a block reward
+        /// transaction.
+        /// </returns>
         private static Block CreateGenesisBlock(Wallet wallet)
         {
             Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "0009-0007-0687-6045", founder);
@@ -195,6 +266,15 @@ namespace SciChain
             return new Block(DateTime.Now, null, trs);
         }
 
+        /// <summary>
+        /// The function GetLatestBlock returns the latest block in a chain if it exists, otherwise it
+        /// returns null.
+        /// </summary>
+        /// <returns>
+        /// The GetLatestBlock method returns the latest block in the Chain list. If the Chain list is
+        /// not empty, it returns the block at the last index (Chain.Count - 1). If the Chain list is
+        /// empty, it returns null.
+        /// </returns>
         public static Block GetLatestBlock()
         {
             if (Chain.Count > 0)
@@ -203,6 +283,19 @@ namespace SciChain
                 return null;
         }
 
+        /// <summary>
+        /// The function `GetBalance` calculates the balance of a given address by iterating through
+        /// blockchain transactions.
+        /// </summary>
+        /// <param name="address">The `GetBalance` method takes a `string` parameter `address`, which
+        /// represents the address for which you want to retrieve the balance. The method iterates
+        /// through the blocks in the `Chain` and calculates the balance for the specified address by
+        /// subtracting the amounts sent from that address and adding the</param>
+        /// <returns>
+        /// The GetBalance method returns the balance of a specific address by iterating through all
+        /// transactions in the blockchain and calculating the total amount of funds sent and received
+        /// by that address.
+        /// </returns>
         public static decimal GetBalance(string address)
         {
             decimal balance = 0;
@@ -226,6 +319,16 @@ namespace SciChain
             return balance;
         }
 
+        /// <summary>
+        /// This C# function calculates the reputation balance for a given address based on transactions
+        /// in a blockchain.
+        /// </summary>
+        /// <param name="address">It looks like you are trying to calculate the reputation balance for a
+        /// specific address by iterating through a chain of blocks and transactions. However, there
+        /// seems to be a logical issue in your code.</param>
+        /// <returns>
+        /// The `GetReputation` method is returning the reputation balance for a given address.
+        /// </returns>
         public static decimal GetReputation(string address)
         {
             decimal balance = 0;
@@ -251,6 +354,14 @@ namespace SciChain
             return balance;
         }
 
+        /// <summary>
+        /// This C# function calculates the remaining balance in the treasury after deducting a fee for
+        /// each registration transaction in a blockchain.
+        /// </summary>
+        /// <returns>
+        /// The `GetTreasury` method is returning the balance of the treasury after deducting 0.005M for
+        /// each registration transaction in the blockchain.
+        /// </returns>
         public static decimal GetTreasury()
         {
             decimal balance = treasury;
@@ -267,6 +378,16 @@ namespace SciChain
             return balance;
         }
 
+        /// <summary>
+        /// This C# function iterates through blocks and pending transactions to count the number of
+        /// reviews associated with a given GUID.
+        /// </summary>
+        /// <param name="guid">The `guid` parameter in the `GetReviews` method is a string that
+        /// represents a unique identifier for a review. The method iterates through the `Chain` and
+        /// `PendingTransactions` to count the number of reviews that match the provided `guid`.</param>
+        /// <returns>
+        /// The GetReviews method returns the total number of reviews associated with a specific GUID.
+        /// </returns>
         public static int GetReviews(string guid)
         {
             int revs = 0;
@@ -291,6 +412,20 @@ namespace SciChain
             return revs;
         }
 
+        /// <summary>
+        /// The function `GetTransaction` searches for a specific transaction within a chain of blocks
+        /// in C#.
+        /// </summary>
+        /// <param name="Transaction">It looks like you are trying to implement a method that retrieves
+        /// a specific transaction from a blockchain. The `GetTransaction` method takes a `Transaction`
+        /// object as a parameter and iterates through the blocks in the blockchain to find and return
+        /// the matching transaction.</param>
+        /// <returns>
+        /// The GetTransaction method is returning a Transaction object. If the input Transaction object
+        /// `tr` is found within the list of Transactions in the blocks of the Chain, then that specific
+        /// Transaction object is returned. If the input Transaction object is not found, then null is
+        /// returned.
+        /// </returns>
         public static Transaction GetTransaction(Transaction tr)
         {
             foreach (var block in Chain)
@@ -304,6 +439,25 @@ namespace SciChain
             }
             return null;
         }
+        /// <summary>
+        /// The GetTransaction function searches for a transaction with a specific signature in the
+        /// blockchain and pending transactions.
+        /// </summary>
+        /// <param name="signature">The `signature` parameter is a string that represents the unique
+        /// identifier of a transaction. The `GetTransaction` method searches for a transaction with a
+        /// matching signature within the blockchain and, optionally, within the pending transactions if
+        /// the `searchPending` parameter is set to true.</param>
+        /// <param name="searchPending">The `searchPending` parameter in the `GetTransaction` method is
+        /// a boolean parameter that specifies whether to search for the transaction in the pending
+        /// transactions list if it is not found in the blockchain. If `searchPending` is set to `true`,
+        /// the method will also search through the `PendingTransactions</param>
+        /// <returns>
+        /// The GetTransaction method returns a Transaction object with the specified signature if it is
+        /// found in the blockchain or pending transactions. If the transaction with the specified
+        /// signature is not found and the searchPending parameter is set to true, it will return the
+        /// transaction from the pending transactions. If no matching transaction is found, it will
+        /// return null.
+        /// </returns>
         public static Transaction GetTransaction(string signature,bool searchPending = false)
         {
             foreach (var block in Chain)
@@ -324,6 +478,18 @@ namespace SciChain
             return null;
         }
 
+        /// <summary>
+        /// This C# function iterates through blocks and pending transactions to count the occurrences
+        /// of a specific GUID in flag transactions.
+        /// </summary>
+        /// <param name="guid">The `guid` parameter in the `GetFlags` method is a string that represents
+        /// a unique identifier. The method iterates through blocks in a chain and pending transactions
+        /// to count the number of transactions with a type of `flag` and data matching the provided
+        /// `guid`.</param>
+        /// <returns>
+        /// The GetFlags method returns the total number of flag transactions that match the provided
+        /// GUID in both the Chain and PendingTransactions lists.
+        /// </returns>
         public static int GetFlags(string guid)
         {
             int revs = 0;
@@ -347,6 +513,17 @@ namespace SciChain
             }
             return revs;
         }
+       /// <summary>
+       /// The function `GetPendingBlock` retrieves a pending block based on a given GUID.
+       /// </summary>
+       /// <param name="guid">The `guid` parameter in the `GetPendingBlock` method is a unique
+       /// identifier used to search for a specific block in the `PendingBlocks` collection. The method
+       /// iterates through the `PendingBlocks` collection and returns the block that matches the
+       /// provided `guid`. If no matching block is found</param>
+       /// <returns>
+       /// The GetPendingBlock method is returning a Block object with the specified GUID if it exists
+       /// in the PendingBlocks collection. If no matching Block is found, it will return null.
+       /// </returns>
         public static Block GetPendingBlock(string guid)
         {
             foreach (var item in PendingBlocks)
@@ -356,6 +533,17 @@ namespace SciChain
             }
             return null;
         }
+        /// <summary>
+        /// The function CalculateHash takes a string input, computes its SHA-256 hash value, and
+        /// returns the hash as a lowercase hexadecimal string.
+        /// </summary>
+        /// <param name="st">The `CalculateHash` method takes a string `st` as input and calculates the
+        /// SHA-256 hash of that string. The hash is then returned as a lowercase hexadecimal string
+        /// representation without any dashes.</param>
+        /// <returns>
+        /// The CalculateHash method returns a lowercase hexadecimal string representation of the
+        /// SHA-256 hash of the input string.
+        /// </returns>
         public static string CalculateHash(string st)
         {
             using (SHA256 sha256 = SHA256.Create())
@@ -364,6 +552,18 @@ namespace SciChain
                 return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
             }
         }
+        /// <summary>
+        /// The function `AddBlock` adds a new block to a blockchain, ensuring that it is not a
+        /// duplicate, updating the block index and hash, and saving it to the chain.
+        /// </summary>
+        /// <param name="Block">A block is a data structure that contains information about
+        /// transactions, such as sender, receiver, amount, timestamp, and a hash of the previous block.
+        /// It is used in blockchain technology to store data securely and immutably.</param>
+        /// <returns>
+        /// If the condition `item.Hash == block.Hash` is met in the `foreach` loop, the method will
+        /// return early and exit the loop. Otherwise, if the loop completes without finding a matching
+        /// hash, nothing will be returned explicitly.
+        /// </returns>
         public static void AddBlock(Block block)
         {
             foreach (var item in Chain)
@@ -399,11 +599,29 @@ namespace SciChain
             }
         }
 
+        /// <summary>
+        /// The AddTransaction function broadcasts a new transaction.
+        /// </summary>
+        /// <param name="Transaction">The `AddTransaction` method is a static method that takes a
+        /// `Transaction` object as a parameter. Inside the method, it calls the
+        /// `BroadcastNewTransaction` method with the `Transaction` object passed as an
+        /// argument.</param>
         public static void AddTransaction(Transaction transaction)
         {
             BroadcastNewTransaction(transaction);
         }
 
+        /// <summary>
+        /// The function `AddPendingBlock` checks if a block is already in the pending blocks list,
+        /// creates a directory if it doesn't exist, writes the block to a JSON file, adds the block to
+        /// the pending blocks list, and broadcasts the new pending block.
+        /// </summary>
+        /// <param name="Block">A data structure representing a block in a blockchain, typically
+        /// containing information such as a unique identifier (GUID) and other relevant data.</param>
+        /// <returns>
+        /// If a block with the same GUID as the input block `b` is found in the `PendingBlocks`
+        /// collection, the method will return without performing any further actions.
+        /// </returns>
         public static void AddPendingBlock(Block b)
         {
             foreach (var item in PendingBlocks)
@@ -416,12 +634,32 @@ namespace SciChain
             PendingBlocks.Add(b);
             BroadcastNewPendingBlock(b);
         }
+        /// <summary>
+        /// The function `SavePendingTransaction` saves a transaction to a directory as a JSON file.
+        /// </summary>
+        /// <param name="Transaction">The `Transaction` parameter in the `SavePendingTransaction` method
+        /// represents a transaction object that contains information about a financial transaction,
+        /// such as the sender, receiver, amount, timestamp, and signature. This method is responsible
+        /// for saving pending transactions to a specific directory in JSON format.</param>
         private static void SavePendingTransaction(Transaction transaction)
         {
             Directory.CreateDirectory(dir + "/PendingTransactions");
             PendingTransactions.Add(transaction);
             File.WriteAllText(dir + "/PendingTransactions/" + CalculateHash(transaction.Signature) + ".json",JsonConvert.SerializeObject(transaction));
         }
+        /// <summary>
+        /// The function `ProcessTransaction` processes different types of transactions based on their
+        /// transaction type and performs various checks and actions accordingly.
+        /// </summary>
+        /// <param name="Transaction">It looks like the code you provided is a method called
+        /// `ProcessTransaction` that processes different types of transactions based on their
+        /// `TransactionType`. The method checks if a transaction has already been processed, verifies
+        /// the transaction, and then performs specific actions based on the type of
+        /// transaction.</param>
+        /// <returns>
+        /// The method `ProcessTransaction` returns a boolean value, either `true` or `false`, depending
+        /// on the outcome of processing the transaction.
+        /// </returns>
         public static bool ProcessTransaction(Transaction transaction)
         {
             //If this transaction has already been processed we skip and return false.)
@@ -514,6 +752,17 @@ namespace SciChain
             }
             return true;
         }
+        /// <summary>
+        /// The function `VerifyTransaction` uses RSA encryption to verify the integrity of a
+        /// transaction by comparing the hashed data with the provided signature.
+        /// </summary>
+        /// <param name="Transaction">The `VerifyTransaction` method is used to verify the authenticity
+        /// of a transaction by checking its signature against the provided public key.</param>
+        /// <returns>
+        /// The method `VerifyTransaction` returns a boolean value. It returns `true` if the
+        /// verification of the transaction signature using RSA is successful, and `false` if there is
+        /// an exception during the verification process or if the verification fails.
+        /// </returns>
         public static bool VerifyTransaction(Transaction transaction)
         {
             using (var rsa = new RSACryptoServiceProvider())
@@ -612,6 +861,22 @@ namespace SciChain
                 Content = "";
             }
         }
+        /// <summary>
+        /// The ProcessMessage function in C# processes different types of messages received from peers
+        /// in a blockchain network.
+        /// </summary>
+        /// <param name="Message">The `ProcessMessage` method you provided is responsible for handling
+        /// different types of messages received from a peer in a peer-to-peer network. The `Message`
+        /// parameter represents the message being processed, and the `Peer` parameter represents the
+        /// peer from which the message was received.</param>
+        /// <param name="Peer">A `Peer` represents another node in a peer-to-peer network. In this
+        /// context, it seems to be an entity that can communicate with the current node and exchange
+        /// messages. The `Peer` object likely contains information such as the address of the peer node
+        /// and possibly other relevant details for establishing connections and</param>
+        /// <returns>
+        /// The method `ProcessMessage` returns void, as indicated by the `void` keyword in its
+        /// signature.
+        /// </returns>
         public static void ProcessMessage(Message message,Peer peer)
         {
             Console.WriteLine("Processsing message. " + message.Type);
@@ -729,6 +994,24 @@ namespace SciChain
             // Handle other message types as necessary
         }
 
+        /// <summary>
+        /// The ConnectToPeer function connects a chat client to a peer at a specified address and port,
+        /// handling exceptions and adding the peer to a list of connected peers.
+        /// </summary>
+        /// <param name="address">The `address` parameter in the `ConnectToPeer` method is a string that
+        /// represents the network address of the peer you want to connect to. This could be an IP
+        /// address or a domain name.</param>
+        /// <param name="ChatClient">A ChatClient object represents a client in a chat application. It
+        /// likely contains information about the client, such as an ID, and methods for connecting to
+        /// other clients or sending messages.</param>
+        /// <param name="port">The `port` parameter in the `ConnectToPeer` method is an integer value
+        /// that represents the port number to which the connection will be established with the peer
+        /// identified by the `address`. It is used to specify the specific communication endpoint on
+        /// the network where the connection will be made.</param>
+        /// <returns>
+        /// If a peer with the specified address and port already exists in the list of peers, the
+        /// method will return without adding a new peer.
+        /// </returns>
         public static void ConnectToPeer(string address, ChatClient client, int port)
         {
             try
@@ -748,6 +1031,13 @@ namespace SciChain
                 Console.WriteLine("Error connecting to peer: " + e.Message);
             }
         }
+        /// <summary>
+        /// The function `BroadcastNewBlock` sends a new block message to all connected peers in a C#
+        /// application.
+        /// </summary>
+        /// <param name="Block">A data structure representing a block in a blockchain, typically
+        /// containing information such as the block's index, timestamp, data, previous hash, and
+        /// hash.</param>
         public static void BroadcastNewBlock(Block block)
         {
             foreach (var peer in Peers)
@@ -766,6 +1056,13 @@ namespace SciChain
                 }
             }
         }
+        /// <summary>
+        /// The function `BroadcastNewPendingBlock` sends a message containing a new pending block to
+        /// all connected peers.
+        /// </summary>
+        /// <param name="Block">A data structure representing a block in a blockchain, typically
+        /// containing information such as block number, timestamp, previous block hash, transactions,
+        /// and a nonce.</param>
         public static void BroadcastNewPendingBlock(Block block)
         {
             
@@ -785,6 +1082,13 @@ namespace SciChain
                 }
             }
         }
+       /// <summary>
+       /// The function `SendGetBlockMessage` sends a GetBlock message to a peer using JSON
+       /// serialization.
+       /// </summary>
+       /// <param name="GetCommand">GetCommand is a class that represents a command to get a block. It
+       /// likely contains information such as the data of the block being requested and the peer to
+       /// which the request should be sent.</param>
         public static void SendGetBlockMessage(GetCommand com)
         {
             Console.WriteLine("Sending GetBlock Message: " + com.Data);
@@ -801,6 +1105,21 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
+        /// <summary>
+        /// The function `SendBlockMessage` sends a new block message to a peer using JSON
+        /// serialization.
+        /// </summary>
+        /// <param name="Peer">A `Peer` represents a network peer that the current node is connected to.
+        /// It typically contains information such as the peer's ID, IP address, and a client for
+        /// sending and receiving messages over the network.</param>
+        /// <param name="Block">A block is a data structure used in blockchain technology to store a
+        /// collection of transactions. It contains information such as the block number, timestamp, a
+        /// reference to the previous block, a list of transactions, and a nonce value used in the
+        /// mining process.</param>
+        /// <returns>
+        /// If the `Peer p` parameter is null, the method will return early after printing
+        /// "SendBlockMessage: Peer is null." to the console.
+        /// </returns>
         public static void SendBlockMessage(Peer p, Block b)
         {
             if(p == null)
@@ -822,6 +1141,14 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
+        /// <summary>
+        /// The function `SendGetPendingBlocksMessage` sends a message to a peer to request pending
+        /// blocks using JSON serialization.
+        /// </summary>
+        /// <param name="GetCommand">The `GetCommand` class seems to be a custom class used in your
+        /// code. It likely contains information related to a command to get pending blocks. It seems to
+        /// have a property `Peer` of type `Peer` which probably represents a network peer to which the
+        /// message will be sent.</param>
         public static void SendGetPendingBlocksMessage(GetCommand com)
         {
             var message = new Message("GetPending", JsonConvert.SerializeObject(com));
@@ -843,6 +1170,21 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
+        /// <summary>
+        /// The function `SendPendingBlocksMessage` sends a message containing a pending block to a
+        /// specified peer.
+        /// </summary>
+        /// <param name="Peer">Peer is a class representing a network peer in a peer-to-peer system. It
+        /// likely contains information about the peer such as its ID, client connection, and other
+        /// relevant data for communication.</param>
+        /// <param name="index">The `index` parameter in the `SendPendingBlocksMessage` method
+        /// represents the position of the pending block in the `PendingBlocks` list that you want to
+        /// send a message about. It is used to access the specific pending block in the list for
+        /// processing and sending the message.</param>
+        /// <returns>
+        /// If the `index` parameter is greater than the count of `PendingBlocks`, the method will
+        /// return early without sending any message.
+        /// </returns>
         public static void SendPendingBlocksMessage(Peer p,int index)
         {
             if (index > PendingBlocks.Count)
@@ -864,6 +1206,12 @@ namespace SciChain
                 // Handle error (e.g., remove peer from list)
             }
         }
+        /// <summary>
+        /// The function `BroadcastNewTransaction` sends a new transaction to all connected peers in a
+        /// C# application.
+        /// </summary>
+        /// <param name="Transaction">A transaction object that contains information about a financial
+        /// transaction, such as sender, receiver, amount, timestamp, etc.</param>
         public static void BroadcastNewTransaction(Transaction tr)
         {
             foreach (var peer in Peers)
@@ -882,6 +1230,12 @@ namespace SciChain
                 }
             }
         }
+        /// <summary>
+        /// The function `BroadcastNewPeer` sends a message to all peers in a list, excluding the new
+        /// peer being added, in a C# program.
+        /// </summary>
+        /// <param name="Peer">Peer is a class representing a network peer, containing properties such
+        /// as Address, Port, and Client.</param>
         public static void BroadcastNewPeer(Peer pr)
         {
             foreach (var peer in Peers)
@@ -902,6 +1256,14 @@ namespace SciChain
                 }
             }
         }
+        /// <summary>
+        /// The function BroadcastPeerList sends a list of peers to a specific peer using JSON
+        /// serialization.
+        /// </summary>
+        /// <param name="pr">an array of Peer objects representing a list of peers to broadcast
+        /// to.</param>
+        /// <param name="Peer">A Peer object representing a single peer in a network. It typically
+        /// contains information such as the peer's address, port, and client connection.</param>
         public static void BroadcastPeerList(Peer[] pr,Peer peer)
         {
             var message = new Message("Peers", JsonConvert.SerializeObject(pr));
@@ -918,11 +1280,27 @@ namespace SciChain
             }
         }
 
+        /// <summary>
+        /// The GetBlock function sends a GetBlock message to a peer with a specified index.
+        /// </summary>
+        /// <param name="Peer">Peer represents a network node or participant in a peer-to-peer network.
+        /// It typically contains information about the network address, such as IP and port, of the
+        /// peer with which communication is being established.</param>
+        /// <param name="index">The `index` parameter is an integer value that represents the index of
+        /// the block that you want to retrieve from a peer in a blockchain network.</param>
         public static void GetBlock(Peer peer, int index)
         {
             GetCommand com = new GetCommand(peer,"GetBlock",index.ToString());
             SendGetBlockMessage(com);
         }
+        /// <summary>
+        /// The GetPending function creates a GetCommand object with a specified index and sends a
+        /// message to request pending blocks from a peer.
+        /// </summary>
+        /// <param name="Peer">A class representing a network peer that the code is interacting
+        /// with.</param>
+        /// <param name="index">The `index` parameter is an integer value that represents the index of
+        /// the pending block to retrieve.</param>
         public static void GetPending(Peer peer, int index)
         {
             GetCommand com = new GetCommand(peer, "GetPending",index.ToString());
@@ -930,6 +1308,14 @@ namespace SciChain
         }
         #endregion
 
+        /// <summary>
+        /// The function `MineBlock` mines a block by processing pending transactions, verifying blocks,
+        /// adding rewards, and updating the blockchain.
+        /// </summary>
+        /// <param name="GUID">The `GUID` parameter in the `MineBlock` method is a unique identifier for
+        /// the block that is being mined. It is used to retrieve the pending block to be mined and
+        /// perform various operations related to mining, such as verifying transactions, adding
+        /// transactions to the block, processing transactions, rewarding miners,</param>
         public static void MineBlock(string GUID)
         {
             Console.WriteLine("Mining Block:" + GUID);
@@ -994,6 +1380,27 @@ namespace SciChain
                     PrivateKey = rsa.ExportParameters(true); // Export the private key
                 }
             }
+            /// <summary>
+            /// The function `EncryptAndSaveKeys` generates a random salt, derives a key and IV from a
+            /// password and salt, encrypts and saves public and private keys to a file using AES
+            /// encryption.
+            /// </summary>
+            /// <param name="publicKey">The `publicKey` parameter in the `EncryptAndSaveKeys` method is
+            /// a string that represents the public key that you want to encrypt and save to a file.
+            /// This key is typically used for encryption or verifying signatures in asymmetric
+            /// cryptography.</param>
+            /// <param name="privateKey">The `privateKey` parameter in the `EncryptAndSaveKeys` method
+            /// is a string that represents the private key that you want to encrypt and save to a file.
+            /// This private key is typically used in asymmetric cryptography for signing or decrypting
+            /// data. It is important to keep the private key secure and</param>
+            /// <param name="password">The `password` parameter in the `EncryptAndSaveKeys` method is
+            /// used to derive a key and IV (Initialization Vector) for encrypting the public and
+            /// private keys before saving them to a file. The password is used in conjunction with a
+            /// randomly generated salt to create a secure encryption key using the</param>
+            /// <param name="filePath">The `filePath` parameter in the `EncryptAndSaveKeys` method is
+            /// the path to the file where the encrypted keys will be saved. This parameter should
+            /// specify the location and name of the file where the keys will be stored after
+            /// encryption. Make sure to provide the full path including the file name and</param>
             private static void EncryptAndSaveKeys(string publicKey, string privateKey, string password, string filePath)
             {
                 // Generate a random salt
@@ -1032,11 +1439,33 @@ namespace SciChain
                     }
                 }
             }
+            /// <summary>
+            /// The Save function encrypts and saves RSA key parameters to a file using a provided
+            /// password.
+            /// </summary>
+            /// <param name="password">The `password` parameter is a string that is passed to the `Save`
+            /// method. It is used as a parameter for encrypting and saving keys in the
+            /// `EncryptAndSaveKeys` method.</param>
             public void Save(string password)
             {
                 string path = Path.GetDirectoryName(Environment.ProcessPath);
                 EncryptAndSaveKeys(RSA.RSAParametersToString(PublicKey), RSA.RSAParametersToStringAll(PrivateKey), password,path + "/wallet.dat");
             }
+            /// <summary>
+            /// The function `ReadAndDecryptKeys` reads and decrypts public and private keys from a file
+            /// using a password and salt.
+            /// </summary>
+            /// <param name="password">The `password` parameter is the password used to derive the key
+            /// and IV for decrypting the keys stored in the file.</param>
+            /// <param name="filePath">The `filePath` parameter in the `ReadAndDecryptKeys` method is
+            /// the path to the file from which the public and private keys will be read and decrypted.
+            /// It should be a string representing the location of the file on the file system.</param>
+            /// <param name="publicKey">The `publicKey` parameter in the `ReadAndDecryptKeys` method is
+            /// used to store the decrypted public key read from the specified file after decrypting it
+            /// using the provided password and salt.</param>
+            /// <param name="privateKey">The `privateKey` parameter in the `ReadAndDecryptKeys` method
+            /// is an output parameter that will store the decrypted private key read from the specified
+            /// file after decrypting it using the provided password.</param>
             public static void ReadAndDecryptKeys(string password, string filePath, out string publicKey, out string privateKey)
             {
                 byte[] salt = new byte[16];
@@ -1069,6 +1498,16 @@ namespace SciChain
                     }
                 }
             }
+            /// <summary>
+            /// The Load function reads and decrypts keys from a wallet file using a provided password
+            /// in C#.
+            /// </summary>
+            /// <param name="password">The `password` parameter is a string that represents the password
+            /// needed to decrypt the keys stored in the wallet file.</param>
+            /// <returns>
+            /// If the file "wallet.dat" does not exist at the specified path, the method will return
+            /// without performing any further actions.
+            /// </returns>
             public void Load(string password)
             {
                 string path = Path.GetDirectoryName(Environment.ProcessPath);
@@ -1081,6 +1520,16 @@ namespace SciChain
             }
         }
 
+        /// <summary>
+        /// The function `IsValid` checks the validity of a blockchain by verifying the hashes and
+        /// previous hash links between blocks.
+        /// </summary>
+        /// <returns>
+        /// The `IsValid` method is checking the validity of a blockchain by iterating through the
+        /// blocks in the chain. It returns a boolean value - `true` if the blockchain is valid, and
+        /// `false` if any block's hash does not match the calculated hash or if the previous hash of a
+        /// block does not match the hash of the previous block.
+        /// </returns>
         public static bool IsValid()
         {
             for (int i = 1; i < Chain.Count; i++)
@@ -1101,6 +1550,9 @@ namespace SciChain
             return true;
         }
 
+        /// <summary>
+        /// The Save function saves settings and blockchain blocks to files in JSON format.
+        /// </summary>
         public static void Save()
         {
             Settings.AddSettings("Height",currentHeight.ToString());
@@ -1114,6 +1566,11 @@ namespace SciChain
                 }
             }
         }
+        /// <summary>
+        /// The function `Save` saves a `Block` object to a JSON file and updates the current height
+        /// setting.
+        /// </summary>
+        /// <param name="Block">A block object that contains data to be saved.</param>
         public static void Save(Block block)
         {
             Settings.AddSettings("Height", currentHeight.ToString());
@@ -1125,6 +1582,10 @@ namespace SciChain
             }
         }
         static bool loaded = false;
+        /// <summary>
+        /// The function `GetBlockThread` continuously retrieves blocks and pending transactions from
+        /// peers until a certain condition is met.
+        /// </summary>
         private static void GetBlockThread()
         {
             do
@@ -1144,6 +1605,11 @@ namespace SciChain
                 }
             } while (true);
         }
+        /// <summary>
+        /// The Load function reads and deserializes JSON files for blocks and transactions, adds them
+        /// to corresponding lists, creates a directory for pending blocks, and starts a new thread for
+        /// block retrieval.
+        /// </summary>
         public static void Load()
         {
             foreach (var f in Directory.GetFiles(dir + "/Blocks/"))
@@ -1171,22 +1637,44 @@ namespace SciChain
         }
 
     }
+   /* The ChatSession class extends TcpSession and handles connection, disconnection, message
+   receiving, and error handling for a chat server. */
     public class ChatSession : TcpSession
     {
         public ChatSession(TcpServer server) : base(server) { }
 
+        /// <summary>
+        /// The OnConnected method in C# prints a message indicating a successful connection and then
+        /// connects to a peer using the Blockchain class and a ChatClient object.
+        /// </summary>
         protected override void OnConnected()
         {
             Console.WriteLine("Connected: " + this.Server.Address);
             Blockchain.ConnectToPeer(this.Server.Address,new ChatClient(this.Server.Address, this.Server.Port),this.Server.Port);
         }
 
+        /// <summary>
+        /// The OnDisconnected function in C# prints a message indicating disconnection and removes the
+        /// peer from the Blockchain.
+        /// </summary>
         protected override void OnDisconnected()
         {
             Console.WriteLine("Disconnected: " + this.Server.Address);
             Blockchain.Peers.Remove(this.Id);
         }
 
+       /// <summary>
+       /// This function receives a byte array, converts it to a UTF-8 string, and then multicasts the
+       /// message to all connected sessions in a server.
+       /// </summary>
+       /// <param name="buffer">The `buffer` parameter is an array of bytes that contains the data
+       /// received by the server.</param>
+       /// <param name="offset">The `offset` parameter in the `OnReceived` method represents the
+       /// starting position in the `buffer` array from which the data should be read. It is of type
+       /// `long` and indicates the index in the buffer where the data starts.</param>
+       /// <param name="size">The `size` parameter in the `OnReceived` method represents the size of the
+       /// data received in bytes. It indicates the length of the data stored in the `buffer` starting
+       /// from the `offset` position.</param>
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             string message = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
@@ -1194,12 +1682,21 @@ namespace SciChain
             Server.Multicast(message);
         }
 
+        /// <summary>
+        /// The `OnError` function in C# is used to handle and display errors that occur in a chat TCP
+        /// session.
+        /// </summary>
+        /// <param name="SocketError">The `SocketError` parameter in the `OnError` method represents an
+        /// enumeration of socket error codes that can occur during socket operations. It provides
+        /// information about the specific error that occurred, such as connection failures, timeouts,
+        /// or other socket-related issues.</param>
         protected override void OnError(SocketError error)
         {
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
     }
 
+    /* The ChatServer class extends TcpServer and handles errors in a chat TCP server. */
     public class ChatServer : TcpServer
     {
         public ChatServer(IPAddress address, int port) : base(address, port) { }
@@ -1212,10 +1709,16 @@ namespace SciChain
         }
     }
 
+    /* The `ChatClient` class is a C# TCP client that handles connecting, disconnecting, receiving
+    messages, and processing JSON messages related to a blockchain. */
     public class ChatClient : NetCoreServer.TcpClient
     {
         public ChatClient(string address, int port) : base(address, port) { }
 
+        /// <summary>
+        /// The DisconnectAndStop function sets a flag to stop a process, disconnects asynchronously,
+        /// and waits until the connection is no longer active.
+        /// </summary>
         public void DisconnectAndStop()
         {
             _stop = true;
@@ -1224,12 +1727,20 @@ namespace SciChain
                 Thread.Yield();
         }
 
+       /// <summary>
+       /// The OnConnected function in C# prints a message indicating that a new session has been
+       /// connected with a specific Id.
+       /// </summary>
         protected override void OnConnected()
         {
             Console.WriteLine($"Chat TCP client connected a new session with Id {Id}");
 
         }
 
+       /// <summary>
+       /// The OnDisconnected method in C# handles the disconnection of a chat TCP client session by
+       /// printing a message, waiting for a specified time, and attempting to reconnect if not stopped.
+       /// </summary>
         protected override void OnDisconnected()
         {
             Console.WriteLine($"Chat TCP client disconnected a session with Id {Id}");
@@ -1242,6 +1753,18 @@ namespace SciChain
                 ConnectAsync();
         }
 
+        /// <summary>
+        /// The function processes received byte data by converting it to a string, extracting messages,
+        /// deserializing JSON objects, and handling errors.
+        /// </summary>
+        /// <param name="buffer">The `buffer` parameter is a byte array that contains the data received
+        /// by the method.</param>
+        /// <param name="offset">The `offset` parameter in the `OnReceived` method represents the
+        /// starting position in the `buffer` array from which to begin reading data. It is of type
+        /// `long` and indicates the index in the array where the data to be processed starts.</param>
+        /// <param name="size">The `size` parameter in the `OnReceived` method represents the size of
+        /// the data in bytes that has been received. It is used to determine how much data from the
+        /// buffer should be processed.</param>
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             string s = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
@@ -1267,6 +1790,19 @@ namespace SciChain
                 }
             }
         }
+        /// <summary>
+        /// The function `GetMessage` extracts messages enclosed within curly braces from a given string
+        /// and returns them as an array of strings.
+        /// </summary>
+        /// <param name="s">The `GetMessage` method you provided seems to be splitting a string `s` into
+        /// an array of substrings based on curly braces `{}`. The method accumulates characters until
+        /// it encounters a closing curly brace `}` that matches the opening curly brace `{` at the same
+        /// scope level. It then</param>
+        /// <returns>
+        /// The `GetMessage` method returns an array of strings that are extracted from the input string
+        /// `s` based on the curly braces `{}`. Each string within the array represents a substring
+        /// enclosed within a pair of curly braces in the input string.
+        /// </returns>
         private string[] GetMessage(string s)
         {
             List<string> sts = new List<string>();
@@ -1292,6 +1828,14 @@ namespace SciChain
             }
             return sts.ToArray();
         }
+       /// <summary>
+       /// The `OnError` function in C# is used to handle and display errors that occur in a chat TCP
+       /// client.
+       /// </summary>
+       /// <param name="SocketError">The `SocketError` parameter in the `OnError` method represents an
+       /// enumeration of socket error codes that can occur during socket operations. It provides
+       /// information about the specific error that occurred, allowing you to handle and respond to
+       /// errors appropriately in your code.</param>
         protected override void OnError(SocketError error)
         {
             Console.WriteLine($"Chat TCP client caught an error with code {error}");
@@ -1304,6 +1848,19 @@ namespace SciChain
     public static class RSA
     {
         //Note we only store the public key parts of the RSA Parameters on purpose.
+        /// <summary>
+        /// The function RSAParametersToString converts RSAParameters to a JSON string by serializing
+        /// the data into a custom object.
+        /// </summary>
+        /// <param name="RSAParameters">The `RSAParameters` structure in .NET represents the standard
+        /// parameters for the RSA algorithm, including the modulus, exponent, prime factors, and
+        /// private key components.</param>
+        /// <returns>
+        /// The `RSAParametersToString` method returns a JSON string representing the RSA parameters in
+        /// a serialized format. The method converts the RSA parameters into a serializable object by
+        /// converting the byte arrays (Modulus and Exponent) into Base64 strings. The other fields (P,
+        /// Q, DP, DQ, InverseQ, D) are currently commented out in the code snippet provided.
+        /// </returns>
         public static string RSAParametersToString(RSAParameters parameters)
         {
             // RSAParameters contains fields that are byte arrays and cannot be directly serialized by JsonConvert,
@@ -1322,6 +1879,18 @@ namespace SciChain
 
             return JsonConvert.SerializeObject(paramsToSerialize);
         }
+       /// <summary>
+       /// The function `StringToRSAParameters` converts a JSON string representation of RSA parameters
+       /// into an `RSAParameters` object in C#.
+       /// </summary>
+       /// <param name="jsonString">The `StringToRSAParameters` method you provided is used to convert a
+       /// JSON string representation of RSA parameters into an `RSAParameters` object.</param>
+       /// <returns>
+       /// The `StringToRSAParameters` method returns an `RSAParameters` object populated with values
+       /// extracted from a JSON string. The `Modulus` and `Exponent` properties are set based on the
+       /// corresponding values in the JSON string after decoding from Base64. The other properties
+       /// (`P`, `Q`, `DP`, `DQ`, `InverseQ`, `D`) are currently commented out in
+       /// </returns>
         public static RSAParameters StringToRSAParameters(string jsonString)
         {
             var paramsFromJson = JsonConvert.DeserializeObject<dynamic>(jsonString);
@@ -1338,6 +1907,19 @@ namespace SciChain
                 //D = paramsFromJson.D != null ? Convert.FromBase64String(paramsFromJson.D.ToString()) : null
             };
         }
+        /// <summary>
+        /// The function RSAParametersToStringAll converts RSAParameters to a JSON string by serializing
+        /// the data into a custom object with base64-encoded byte arrays.
+        /// </summary>
+        /// <param name="RSAParameters">The `RSAParameters` structure in .NET represents the parameters
+        /// of an RSA key. Here is a brief explanation of each field in the `RSAParameters`
+        /// structure:</param>
+        /// <returns>
+        /// The `RSAParametersToStringAll` method takes an `RSAParameters` object as input, converts its
+        /// byte array fields to Base64 strings, and serializes them into a JSON string using
+        /// JsonConvert. The method then returns this JSON string containing the serialized RSA
+        /// parameters.
+        /// </returns>
         public static string RSAParametersToStringAll(RSAParameters parameters)
         {
             // RSAParameters contains fields that are byte arrays and cannot be directly serialized by JsonConvert,
@@ -1356,6 +1938,21 @@ namespace SciChain
 
             return JsonConvert.SerializeObject(paramsToSerialize);
         }
+        /// <summary>
+        /// The function `StringToRSAParametersAll` converts a JSON string containing RSA parameters
+        /// into an RSAParameters object in C#.
+        /// </summary>
+        /// <param name="jsonString">The `StringToRSAParametersAll` method you provided is used to
+        /// convert a JSON string representation of RSA parameters into an `RSAParameters` object. The
+        /// method deserializes the JSON string using
+        /// `JsonConvert.DeserializeObject<dynamic>(jsonString)` from the Newtonsoft.Json
+        /// library.</param>
+        /// <returns>
+        /// The `StringToRSAParametersAll` method returns an `RSAParameters` object populated with
+        /// values extracted from a JSON string. The method deserializes the JSON string into a dynamic
+        /// object, extracts the RSA parameters (Modulus, Exponent, P, Q, DP, DQ, InverseQ, D) from the
+        /// dynamic object, and converts them from Base64 strings to byte arrays before
+        /// </returns>
         public static RSAParameters StringToRSAParametersAll(string jsonString)
         {
             var paramsFromJson = JsonConvert.DeserializeObject<dynamic>(jsonString);
@@ -1379,6 +1976,18 @@ namespace SciChain
         private static readonly string clientId = "APP-PCZPI3V579SL36TV";
         private static readonly string clientSecret = "6d00747a-ae0f-4567-bade-5bfa359bc75a";
         private static readonly System.Net.Http.HttpClient httpClient = new System.Net.Http.HttpClient();
+        /// <summary>
+        /// The function `GetAccessToken` sends a POST request to obtain an access token using OAuth
+        /// authorization code flow.
+        /// </summary>
+        /// <param name="authorizationCode">The `GetAccessToken` method you provided is used to exchange
+        /// an authorization code for an access token using OAuth 2.0. The `authorizationCode` parameter
+        /// is the authorization code that you receive from the OAuth authorization flow. This code is
+        /// obtained after the user has authenticated and authorized your application to access</param>
+        /// <returns>
+        /// The method `GetAccessToken` returns an `OAuthTokenResponse` object, which contains the
+        /// access token that can be used in subsequent requests.
+        /// </returns>
         public static async Task<OAuthTokenResponse> GetAccessToken(string authorizationCode)
         {
             var httpClient = new System.Net.Http.HttpClient();
@@ -1406,7 +2015,9 @@ namespace SciChain
             throw new Exception("Failed to obtain access token.");
         }
 
-        // Assume OAuthTokenResponse is a class that matches the JSON structure of ORCID's response
+        /* The class `OAuthTokenResponse` in C# represents a response object containing properties for
+        access token, bearer, refresh token, expiry, scope, name, ORCID, and potentially other
+        fields. */
         public class OAuthTokenResponse
         {
             [JsonProperty("access_token")]
@@ -1426,6 +2037,17 @@ namespace SciChain
             // Include other fields as necessary
         }
 
+        /// <summary>
+        /// This C# function searches for an ORCID identifier based on a given name using the ORCID API.
+        /// </summary>
+        /// <param name="name">The code you provided is a C# method that searches for an ORCID (Open
+        /// Researcher and Contributor ID) based on a given name. The method sends a request to the
+        /// ORCID API search endpoint with the provided name as a query parameter, retrieves the
+        /// response, and extracts the ORCID i</param>
+        /// <returns>
+        /// The code is making an asynchronous HTTP GET request to the ORCID API to search for a
+        /// specific name. It then extracts the ORCID iD from the response and returns it as a string.
+        /// </returns>
         public static async Task<string> SearchForORCID(string name)
         {
             var searchEndpoint = "https://pub.orcid.org/v3.0/search/";
@@ -1448,6 +2070,18 @@ namespace SciChain
                 return orcidId;
             }
         }
+        /// <summary>
+        /// The function `CheckORCIDExistence` asynchronously checks the existence of an ORCID record by
+        /// making a request to the ORCID API endpoint.
+        /// </summary>
+        /// <param name="orcid">The `CheckORCIDExistence` method is an asynchronous method that checks
+        /// the existence of an ORCID record by making a GET request to the ORCID API endpoint for a
+        /// specific ORCID identifier.</param>
+        /// <returns>
+        /// The method `CheckORCIDExistence` returns a `Task<bool>`. The method asynchronously checks
+        /// the existence of an ORCID record by making a GET request to the ORCID API endpoint and
+        /// returns a boolean value indicating whether the ORCID record exists or not.
+        /// </returns>
         public static async Task<bool> CheckORCIDExistence(string orcid)
         {
             var orcidEndpoint = $"https://pub.orcid.org/v3.0/{orcid}/record";
@@ -1479,6 +2113,15 @@ namespace SciChain
         private static HttpListener httpListener;
         private static string authorizationCode;
 
+        /// <summary>
+        /// The function `StartListenerAsync` initiates an HTTP listener, directs the user to an
+        /// authorization URL, waits for the authorization response, extracts the authorization code,
+        /// and sends an HTTP response to the browser.
+        /// </summary>
+        /// <returns>
+        /// The method `StartListenerAsync` is returning the authorization code obtained from the
+        /// authorization response.
+        /// </returns>
         public static async Task<string> StartListenerAsync()
         {
             string redirectUri = "http://127.0.0.1:8000/";
@@ -1511,6 +2154,14 @@ namespace SciChain
 
             return authorizationCode;
         }
+        /// <summary>
+        /// The function `OpenUrl` opens a specified URL in the default web browser, handling
+        /// platform-specific behavior.
+        /// </summary>
+        /// <param name="url">The `OpenUrl` method you provided is used to open a URL in the default web
+        /// browser. The `url` parameter is a string that represents the URL that you want to open in
+        /// the browser. This method first tries to open the URL using `Process.Start(url)`, and if that
+        /// fails</param>
         private static void OpenUrl(string url)
         {
             try
