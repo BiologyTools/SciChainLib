@@ -8,7 +8,7 @@
     <ApplicationIcon>favicon.ico</ApplicationIcon>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>SciChainLib</Title>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <Authors>Erik Repo</Authors>
     <Description>An experimental blockchain based on ORCID records.</Description>
     <PackageProjectUrl>http://biologytools.net/</PackageProjectUrl>
@@ -52,12 +52,12 @@
     <!-- Also defines .app file name -->
     <CFBundleDisplayName>SciChain</CFBundleDisplayName>
     <CFBundleIdentifier>com.SciChain</CFBundleIdentifier>
-    <CFBundleVersion>0.3.1</CFBundleVersion>
+    <CFBundleVersion>0.4.0</CFBundleVersion>
     <CFBundlePackageType>APPL</CFBundlePackageType>
     <CFBundleSignature>????</CFBundleSignature>
     <CFBundleExecutable>SciChain</CFBundleExecutable>
     <CFBundleIconFile>scichain.icns</CFBundleIconFile>
-    <CFBundleShortVersionString>0.3.1</CFBundleShortVersionString>
+    <CFBundleShortVersionString>0.4.0</CFBundleShortVersionString>
     <!-- Will be copied from output directory -->
     <NSPrincipalClass>NSApplication</NSPrincipalClass>
     <NSHighResolutionCapable>true</NSHighResolutionCapable>

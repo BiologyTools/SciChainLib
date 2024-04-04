@@ -195,8 +195,8 @@ namespace SciChain
         //Total supply is calculated to be one coin per person.
         public const decimal totalSupply = 9900000000 + treasury + founder;
         public const decimal treasury = 100000000;
+        public const string treasuryAddress = "19d8909b48585d0b4798913a9ba2a2d82ae46e1cb24220ac1fa872b1d8037464";
         public const decimal founder = (9900000000 + treasury) * 0.05M;
-        public static decimal treasuryBalance = treasury;
         //We will use 10 billion people as our population
         public const long population = 10000000000;
         //With the treasury we can give each user 0.01 coins. But we give only 0.005 so that half of the treasury is left for developement.
@@ -228,10 +228,18 @@ namespace SciChain
             currentHeight = int.Parse(h);
             Chain = new List<Block>();
             Directory.CreateDirectory(dir + "/Blocks");
-            Server = new ChatServer(IPAddress.Any, 8333);
-            Server.OptionKeepAlive = true;
-            bool start = Server.Start();
-            Console.WriteLine("Started:" + start);
+            try
+            {
+                Server = new ChatServer(IPAddress.Any, 8333);
+                Server.OptionKeepAlive = true;
+                bool start = Server.Start();
+                Console.WriteLine("Started:" + start);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+            
         }
 
         /// <summary>
@@ -246,23 +254,14 @@ namespace SciChain
             AddBlock(CreateGenesisBlock(wallet));
         }
 
-        /// <summary>
-        /// The function CreateGenesisBlock creates a genesis block with a block reward transaction for
-        /// a given wallet.
-        /// </summary>
-        /// <param name="Wallet">A wallet object that contains the public and private keys for a user's
-        /// cryptocurrency transactions.</param>
-        /// <returns>
-        /// The `CreateGenesisBlock` method is returning a `Block` object. This block is created with
-        /// the current date and time (DateTime.Now), has no previous block hash (null), and contains a
-        /// list of transactions (trs) with a single transaction (tr) representing a block reward
-        /// transaction.
-        /// </returns>
+        
         private static Block CreateGenesisBlock(Wallet wallet)
         {
             Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "0009-0007-0687-6045", founder);
+            Transaction tre = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "19d8909b48585d0b4798913a9ba2a2d82ae46e1cb24220ac1fa872b1d8037464", treasury);
             List<Transaction> trs = new List<Transaction>();
             trs.Add(tr);
+            trs.Add(tre);
             return new Block(DateTime.Now, null, trs);
         }
 
@@ -364,18 +363,7 @@ namespace SciChain
         /// </returns>
         public static decimal GetTreasury()
         {
-            decimal balance = treasury;
-            foreach (var block in Chain)
-            {
-                if (block.Transactions != null)
-                foreach (var trans in block.Transactions)
-                {
-                    if (trans.TransactionType != Transaction.Type.registration)
-                        continue;
-                    balance -= 0.005M;
-                }
-            }
-            return balance;
+            return GetBalance(treasuryAddress);
         }
 
         /// <summary>
@@ -439,6 +427,26 @@ namespace SciChain
             }
             return null;
         }
+
+        public static Transaction GetTransactionByData(string data,bool searchPending = false)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.Data == data)
+                            return trans;
+                    }
+            }
+            foreach (var tr in PendingTransactions)
+            {
+                if (tr.Data == data)
+                    return tr;
+            }
+            return null;
+        }
+
         /// <summary>
         /// The GetTransaction function searches for a transaction with a specific signature in the
         /// blockchain and pending transactions.
@@ -660,7 +668,7 @@ namespace SciChain
         /// The method `ProcessTransaction` returns a boolean value, either `true` or `false`, depending
         /// on the outcome of processing the transaction.
         /// </returns>
-        public static bool ProcessTransaction(Transaction transaction)
+        public static async Task<bool> ProcessTransaction(Transaction transaction)
         {
             //If this transaction has already been processed we skip and return false.)
             if(transaction.Signature != null)
@@ -675,8 +683,7 @@ namespace SciChain
                 Console.WriteLine("Transaction failed: Not a valid transaction.");
                 return false;
             }
-            Directory.CreateDirectory(dir + "/PendingTransactions");
-
+            
             if (transaction.TransactionType == Transaction.Type.transaction)
             {
                 // Proceed with adding the transaction
@@ -691,10 +698,17 @@ namespace SciChain
                     }
                 }
                 SavePendingTransaction(transaction);
+                return true;
             }
-            else if (transaction.TransactionType == Transaction.Type.registration)
+            //If the sender is an anonymous user we return here since anonymous users should not be able to perform any other actions.
+            if(!await Orcid.CheckORCIDExistence(transaction.FromAddress))
+            {
+                return false;
+            }
+            if (transaction.TransactionType == Transaction.Type.registration)
             {
                 transaction.Amount = gift;
+                transaction.FromAddress = treasuryAddress;
                 //We will register this user and associate their ORCID ID with their public key (RSAParameters) 
                 //If this is a new user we will send them the gift transaction from the treasury.
                 bool found = false;
@@ -714,7 +728,6 @@ namespace SciChain
                 }
                 if(!found)
                 {
-                    treasuryBalance -= gift;
                     SavePendingTransaction(transaction);
                 }
             }
@@ -1557,6 +1570,7 @@ namespace SciChain
         {
             Settings.AddSettings("Height",currentHeight.ToString());
             Settings.Save();
+            if(Chain != null)
             foreach (var block in Chain)
             {
                 string f = dir + "/Blocks/" + block.Index + ".json";
