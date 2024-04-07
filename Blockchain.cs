@@ -21,6 +21,7 @@ using System.Drawing;
 using System.Runtime.CompilerServices;
 using static SciChain.Blockchain;
 using System.Globalization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 namespace SciChain
 {
     public class Block
@@ -195,7 +196,7 @@ namespace SciChain
         //Total supply is calculated to be one coin per person.
         public const decimal totalSupply = 9900000000 + treasury + founder;
         public const decimal treasury = 100000000;
-        public const string treasuryAddress = "19d8909b48585d0b4798913a9ba2a2d82ae46e1cb24220ac1fa872b1d8037464";
+        public const string treasuryAddress = "a634bc56308e2be97b6f305d8feac8666cc549c0ee127d58a16d8d6e49e86e68";
         public const decimal founder = (9900000000 + treasury) * 0.05M;
         //We will use 10 billion people as our population
         public const long population = 10000000000;
@@ -219,9 +220,10 @@ namespace SciChain
        /// </summary>
        /// <param name="Wallet">A wallet object that contains information about a user's cryptocurrency
        /// wallet.</param>
-        public static void Initialize(Wallet wal)
+        public static void Initialize(Wallet wal,string id)
         {
             wallet = wal;
+            ID = id;
             Settings.Load();
             string h = Settings.GetSettings("Height");
             if(h!="")
@@ -254,11 +256,10 @@ namespace SciChain
             AddBlock(CreateGenesisBlock(wallet));
         }
 
-        
         private static Block CreateGenesisBlock(Wallet wallet)
         {
             Transaction tr = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "0009-0007-0687-6045", founder);
-            Transaction tre = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, "19d8909b48585d0b4798913a9ba2a2d82ae46e1cb24220ac1fa872b1d8037464", treasury);
+            Transaction tre = new Transaction(Transaction.Type.blockreward, null, wallet.PublicKey, treasuryAddress, treasury);
             List<Transaction> trs = new List<Transaction>();
             trs.Add(tr);
             trs.Add(tre);
@@ -295,7 +296,7 @@ namespace SciChain
         /// transactions in the blockchain and calculating the total amount of funds sent and received
         /// by that address.
         /// </returns>
-        public static decimal GetBalance(string address)
+        public static decimal GetBalance(string address, bool pending = false)
         {
             decimal balance = 0;
 
@@ -314,7 +315,20 @@ namespace SciChain
                     }
                 }
             }
-
+            if (pending)
+            {
+                foreach (var trans in PendingTransactions)
+                {
+                    if (trans.FromAddress == address)
+                    {
+                        balance -= trans.Amount;
+                    }
+                    if (trans.ToAddress == address)
+                    {
+                        balance += trans.Amount;
+                    }
+                }
+            }
             return balance;
         }
 
@@ -363,7 +377,7 @@ namespace SciChain
         /// </returns>
         public static decimal GetTreasury()
         {
-            return GetBalance(treasuryAddress);
+            return GetBalance(treasuryAddress,true);
         }
 
         /// <summary>
@@ -414,7 +428,7 @@ namespace SciChain
         /// Transaction object is returned. If the input Transaction object is not found, then null is
         /// returned.
         /// </returns>
-        public static Transaction GetTransaction(Transaction tr)
+        public static Transaction GetTransaction(Transaction tr, bool searchPending = false)
         {
             foreach (var block in Chain)
             {
@@ -425,7 +439,47 @@ namespace SciChain
                             return trans;
                     }
             }
+            if (searchPending)
+            foreach (var t in PendingTransactions)
+            {
+                if (tr == t)
+                    return tr;
+            }
             return null;
+        }
+
+        public static Transaction GetTransaction(Transaction.Type type, bool searchPending = false)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType == type)
+                            return trans;
+                    }
+            }
+            if (searchPending)
+                foreach (var t in PendingTransactions)
+                {
+                    if (t.TransactionType == type)
+                        return t;
+                }
+            return null;
+        }
+
+        public static bool IsGenesis(Block b)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType == Transaction.Type.blockreward && trans.Amount > miningReward)
+                            return true;
+                    }
+            }
+            return false;
         }
 
         public static Transaction GetTransactionByData(string data,bool searchPending = false)
@@ -439,12 +493,28 @@ namespace SciChain
                             return trans;
                     }
             }
+            if (searchPending)
             foreach (var tr in PendingTransactions)
             {
                 if (tr.Data == data)
                     return tr;
             }
             return null;
+        }
+
+        public static bool VerifyBlock(Block bl)
+        {
+            foreach (var block in Chain)
+            {
+                if (block.Transactions != null)
+                    foreach (var trans in block.Transactions)
+                    {
+                        if (trans.TransactionType == Transaction.Type.blockreward && trans.Amount > miningReward)
+                            return false;
+                    }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -521,7 +591,7 @@ namespace SciChain
             }
             return revs;
         }
-       /// <summary>
+        /// <summary>
        /// The function `GetPendingBlock` retrieves a pending block based on a given GUID.
        /// </summary>
        /// <param name="guid">The `guid` parameter in the `GetPendingBlock` method is a unique
@@ -574,6 +644,8 @@ namespace SciChain
         /// </returns>
         public static void AddBlock(Block block)
         {
+            if (!VerifyBlock(block))
+                return;
             foreach (var item in Chain)
             {
                 if (item.Hash == block.Hash)
@@ -892,7 +964,7 @@ namespace SciChain
         /// </returns>
         public static void ProcessMessage(Message message,Peer peer)
         {
-            Console.WriteLine("Processsing message. " + message.Type);
+            Console.WriteLine("Processsing message. " + message.Type + " Balance:" + GetBalance(ID,true));
             if(peer == null)
             {
                 Console.WriteLine("ProcessMessage: Peer is null");
@@ -1095,7 +1167,7 @@ namespace SciChain
                 }
             }
         }
-       /// <summary>
+        /// <summary>
        /// The function `SendGetBlockMessage` sends a GetBlock message to a peer using JSON
        /// serialization.
        /// </summary>
