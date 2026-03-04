@@ -58,6 +58,7 @@ namespace SciChain
             foreach (string item in sts)
             {
                 string[] st = item.Split('=');
+                if (!Default.ContainsKey(st[0]))
                 Default.Add(st[0], st[1]);
             }
         }
